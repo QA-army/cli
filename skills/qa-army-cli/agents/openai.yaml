@@ -1,0 +1,4 @@
+interface:
+  display_name: "QA.army CLI"
+  short_description: "Create durable Tests and run cloud QA"
+  default_prompt: "Use $qa-army-cli to create or reuse durable QA coverage, run it to a terminal result, and report the exact Project, Test, Run, and dashboard receipt."

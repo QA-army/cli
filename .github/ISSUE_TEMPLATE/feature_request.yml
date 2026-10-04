@@ -1,0 +1,25 @@
+name: CLI capability request
+description: Request a QA.army CLI/API capability
+title: "CLI capability: "
+labels:
+  - feature
+body:
+  - type: input
+    id: command
+    attributes:
+      label: Command or capability
+      description: Include the exact `qa-army` command you expected to use.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the user or agent job this capability should complete.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Project context
+      description: Include target type and CI/agent context, but no credentials or secrets.

@@ -1,0 +1,41 @@
+{
+  "name": "Signup entry point",
+  "description": "Verify a visitor can start signup",
+  "group_id": null,
+  "enabled": true,
+  "allow_web_search": false,
+  "deep_thinking": false,
+  "location_override": null,
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "device_name": null,
+  "steps": [
+    {
+      "type": "act",
+      "instruction": "Open the Project homepage",
+      "enabled": true
+    },
+    {
+      "type": "assert",
+      "instruction": "Verify the Get started link is visible",
+      "enabled": true
+    },
+    {
+      "type": "act",
+      "instruction": "Click Get started",
+      "enabled": true
+    },
+    {
+      "type": "assert",
+      "instruction": "Verify the signup form has visible Email and Password fields",
+      "enabled": true
+    },
+    {
+      "type": "screenshot",
+      "instruction": "Capture the signup form",
+      "enabled": true
+    }
+  ]
+}

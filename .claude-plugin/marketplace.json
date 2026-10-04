@@ -1,0 +1,21 @@
+{
+  "name": "qa-army-agent-skills",
+  "owner": {
+    "name": "QA.army",
+    "url": "https://qa.army"
+  },
+  "metadata": {
+    "description": "Agent skills for QA.army CLI workflows",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "qa-army-cli",
+      "description": "Create and run durable plain-language QA.army Tests from coding agents.",
+      "source": "./",
+      "skills": [
+        "./skills/qa-army-cli"
+      ]
+    }
+  ]
+}

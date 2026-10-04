@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: QA.army CLI documentation
+    url: https://qa.army/cli
+    about: Read installation, authentication, and capability guidance.
