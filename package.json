@@ -1,0 +1,59 @@
+{
+  "name": "qa-army",
+  "version": "0.2.3",
+  "description": "Agent-first CLI for QA.army plain-language Web and Mobile testing",
+  "keywords": [
+    "ai",
+    "automation",
+    "cli",
+    "qa",
+    "testing"
+  ],
+  "homepage": "https://qa.army/cli",
+  "bugs": {
+    "url": "https://github.com/QA-army/cli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QA-army/cli.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "qa-army": "dist/src/index.js",
+    "qa": "dist/src/index.js",
+    "venkat": "dist/src/index.js"
+  },
+  "files": [
+    "dist/src",
+    "docs",
+    "examples",
+    "skills",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "package:cli": "npm run build && node scripts/package-cli.mjs",
+    "prepublishOnly": "npm run validate",
+    "test": "vitest run --dir tests",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "validate": "npm run typecheck && npm run test && npm run build",
+    "verify:public": "npm run package:cli && node scripts/verify-public.mjs"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}

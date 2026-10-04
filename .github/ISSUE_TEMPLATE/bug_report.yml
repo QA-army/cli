@@ -1,0 +1,32 @@
+name: CLI bug report
+description: Report incorrect QA.army CLI behavior
+title: "CLI bug: "
+labels:
+  - bug
+body:
+  - type: input
+    id: version
+    attributes:
+      label: CLI version
+      placeholder: qa-army --version
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and safe output
+      description: Redact credentials, tokens, user codes, and private application data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

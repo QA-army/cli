@@ -1,19 +1,9 @@
-# OS
-.DS_Store
-
-# Node/npm
 node_modules/
-
-# TesterArmy artifacts
-.testerarmy/
-
-# Local env
+dist/
+coverage/
+.vercel/
 .env
 .env.*
-
-# Editors
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
+!.env.example
+*.tsbuildinfo
+.worktrees/
