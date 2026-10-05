@@ -1,0 +1,55 @@
+# Repository environment; select this repository folder for native Worktree mode.
+version = 1
+name = "QA.army cli"
+
+[setup]
+script = '''
+#!/usr/bin/env bash
+set -euo pipefail
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+git rev-parse --verify HEAD >/dev/null
+git remote get-url origin >/dev/null
+git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+if git merge-base --is-ancestor origin/main HEAD; then
+  printf 'Setup ready at %s; no dependencies installed or cloud login required.\n' "$(git rev-parse HEAD)"
+elif git merge-base --is-ancestor HEAD origin/main; then
+  if [ -n "$(git status --porcelain)" ]; then
+    printf 'ERROR: stale worktree has local changes; preserve them before updating.\n' >&2
+    exit 1
+  fi
+  git merge --ff-only origin/main
+else
+  printf 'ERROR: worktree diverges from origin/main; preserve it and start from current main.\n' >&2
+  exit 1
+fi
+'''
+
+[cleanup]
+script = '''
+#!/usr/bin/env bash
+set -euo pipefail
+git rev-parse --show-toplevel
+git status --short
+printf 'Cleanup preserves source, credentials, and unknown files. Use Codex archive for managed worktrees; use the workspace helper for manual task worktrees.\n'
+'''
+
+[[actions]]
+name = "Repository status"
+icon = "run"
+command = "git status --short && git branch --show-current && git log -1 --oneline"
+
+[[actions]]
+name = "Install dependencies"
+icon = "run"
+command = "npm ci"
+
+[[actions]]
+name = "Validate CLI"
+icon = "run"
+command = "npm run validate"
+
+[[actions]]
+name = "Verify public package"
+icon = "run"
+command = "npm run verify:public"

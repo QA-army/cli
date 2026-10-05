@@ -27,3 +27,5 @@ npm run validate
 ```
 
 Packaging changes also require `npm run verify:public`. Keep Linux, macOS, and Windows CI green. Read [AGENTS.md](AGENTS.md), the [capability map](docs/CAPABILITIES.md), and [surface map](docs/REPOSITORY_PARITY.md). Unsupported operations return `REQUEST_CAPABILITY`, never a fabricated success.
+
+Codex: open this repo folder as the project and select Worktree from `main`. `.codex/environments/environment.toml` provides setup, cleanup, and actions; dependency installation is explicit.
