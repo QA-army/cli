@@ -27,6 +27,7 @@ const supportedCommands = [
   "groups update", "tests list", "tests get", "tests create", "tests update", "tests archive",
   "tests delete", "tests run", "runs list", "runs create", "runs get", "runs start",
   "runs watch", "runs wait", "runs cancel", "api-keys list", "api-keys create",
+  "memories list", "memories create", "memories update", "memories approve", "memories reject", "memories archive", "memories delete", "memories clear", "memories settings", "memories graph", "memories summary", "memories import", "memories history",
   "api-keys revoke", "capabilities", "docs", "request capability",
 ] as const;
 
@@ -39,14 +40,14 @@ const requestedTestRunFlags = [
 const requestedCommands = [
   "agent init", "run (local browser)", "projects get", "projects update", "projects delete",
   "projects environments", "projects environments-create", "projects environments-delete",
-  "projects credentials", "projects credentials-create", "projects files", "memories list",
-  "memories create", "memories delete", "groups delete", "groups add-test",
+  "projects credentials", "projects credentials-create", "projects files", "groups delete", "groups add-test",
   "groups remove-test", "tests enable", "tests disable",
   ...requestedTestRunFlags.map((flag) => `tests run ${flag}`),
   "upload-app", "ci", "pr run-dynamic",
 ] as const;
 
 const apiActions: Readonly<Record<string, readonly string[]>> = {
+  memories: ["list", "create", "update", "approve", "reject", "archive", "delete", "clear", "settings", "graph", "summary", "import", "history"],
   workspaces: ["list", "create", "get", "update"],
   projects: ["list", "create", "star", "unstar"],
   members: ["list"],
@@ -352,6 +353,16 @@ async function executeTestRun(api: VenkatApi, args: readonly string[], io: CliIo
 async function execute(api: VenkatApi, resource: string, action: string, flags: ReadonlyMap<string, string>) {
   const input = () => jsonObject(required(flags, "--input"));
   const version = () => positiveInteger(required(flags, "--version"), "--version");
+  if(resource==='memories'){
+    const path=`/v1/projects/${id(flags,'--project','prj')}/memory`;
+    if(['list','graph','summary'].includes(action)){onlyFlags(flags,['--project']);return api.operation(path+(action==='list'?'':`/${action}`));}
+    if(action==='clear'){onlyFlags(flags,['--project']);return api.operation(path,'DELETE');}
+    if(action==='history'){onlyFlags(flags,['--project']);return api.operation(path+'/history','POST',{});}
+    if(['create','import','settings'].includes(action)){onlyFlags(flags,['--project','--input']);return api.operation(path+(action==='create'?'':action==='import'?'/imports':'/settings'),action==='settings'?'PATCH':'POST',input());}
+    onlyFlags(flags,['--project','--memory','--version',...(action==='update'?['--input']:[])]);
+    const recordPath=path+`/${id(flags,'--memory','mem')}`;
+    return api.operation(recordPath,action==='update'?'PATCH':'POST',action==='update'?{...input(),revision:version()}:{revision:version(),decision:action==='approve'?'APPROVED':action==='reject'?'REJECTED':'ARCHIVED'});
+  }
   switch (`${resource}.${action}`) {
     case "workspaces.list": onlyFlags(flags, []); return api.operation("/v1/workspaces");
     case "workspaces.create": onlyFlags(flags, ["--input"]); return api.operation("/v1/workspaces", "POST", input());
@@ -422,7 +433,7 @@ function requestedCapability(args: readonly string[]): string | undefined {
     const flag = requestedTestRunFlag(args.slice(2));
     if (flag) return `tests run ${flag}`;
   }
-  if (["agent", "run", "memories", "upload-app", "ci", "pr"].includes(resource)) {
+  if (["agent", "run", "upload-app", "ci", "pr"].includes(resource)) {
     return resource === "run" ? "run (local browser)" : [resource, action].filter(Boolean).join(" ");
   }
   const missing: Record<string, readonly string[]> = {
@@ -467,6 +478,7 @@ function helpText(subject: readonly string[]): string {
     return `qa-army ${topic}\n\n[request capability] Recognized for parity, but not backed by a production QA.army API.\nRun: qa-army request capability "${topic}"`;
   }
   const detail: Record<string, string> = {
+    memories: "Usage: qa-army memories <list|create|update|approve|reject|archive|clear|settings|graph|summary|import|history> --project prj_... [--input JSON] [--memory mem_... --version N]",
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
     setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
     workspaces: "Usage: qa-army workspaces <list|create|get|update> [options]",
@@ -504,15 +516,15 @@ function required(flags: ReadonlyMap<string, string>, name: string) {
   return value;
 }
 
-function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key") {
+function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem") {
   return validateId(required(flags, name), prefix, name);
 }
 
-function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key") {
+function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem") {
   return encodeURIComponent(rawId(flags, name, prefix));
 }
 
-function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key", label: string) {
+function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem", label: string) {
   if (!new RegExp(`^${prefix}_[a-f0-9]{32}$`).test(value)) throw new Error(`${label} is invalid`);
   return value;
 }

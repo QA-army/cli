@@ -21,3 +21,5 @@ This mapping is based on TesterArmy CLI `0.9.0` and its public `cli` repository,
 observed on 2026-09-09. It records command parity only; QA.army retains its own
 WorkOS identity, Workspace authorization, API, Test, Run, evidence, and billing
 model.
+
+Product memory commands use the authorized Project memory API. Setup-only agent credentials cannot manage memory.
