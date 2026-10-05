@@ -1,11 +1,18 @@
-# CLI
+# CLI — developer experience
 
-When this checkout is inside a local QA.army workspace, find the nearest ancestor containing `.qa-army-workspace` and read that ancestor's AGENTS.md before changes. If absent, use this repository's instructions independently; private workspace access is not required.
+**Be a doer.** Inspect, implement, test, review, merge, deploy or publish when needed, and verify the requested outcome. Fix failures and continue until delivered or concretely blocked; a plan, PR, or green build alone is not completion.
 
-- Own CLI commands, flags, output, authentication UX, error handling, packaging, and public CLI documentation.
-- Match supported platform API semantics. Authorization, tenant scope, execution policy, and result truth remain server-owned.
-- Coordinate platform/API changes with affected MCP and skills contracts. Preserve existing package and command identifiers unless an explicit migration changes them.
-- Install with `npm ci`; validate with `npm run validate`. Packaging changes also run `npm run verify:public`.
-- Maintain Linux, macOS, and Windows compatibility and required CI checks. Do not add a QA.army journey gate without a scoped rollout.
-- Work on a clean task branch from current origin/main; preserve unrelated work. Review the final diff, pass required checks, and verify package/public-content boundaries before release.
-- Keep credentials and private operational material out of this public repository.
+If an ancestor contains `.qa-army-workspace`, read its `AGENTS.md` first. Otherwise, this repo stands alone.
+
+- Own commands, flags, JSON receipts, auth UX, errors, packaging, and CLI docs.
+- Match platform API semantics; tenant scope, authorization, execution, and result truth stay server-owned. Coordinate applicable MCP/skills changes and preserve compatibility identifiers.
+- Follow [README](README.md) validation; test malformed input, auth, API failures, and packaging when affected. Keep Linux/macOS/Windows support.
+- Use a clean task branch from current main, preserve unrelated work, review the final diff, and pass required CI. QA.army journey gates currently apply only to landing-marketing.
+- Keep credentials and private operational material out of this public repo.
+
+## Direction
+
+- Build a better product than [TesterArmy](https://tester.army/); read its [blog](https://tester.army/blog) for product guidance and verify ideas against customer needs.
+- Get funding through shipped value, measurable traction, and repeatable demos backed by real evidence. Never invent results.
+- QA.army is the first customer: use the same product, permissions, integrations, and release journeys customers use; turn findings into general fixes.
+- Build for SaaS, web, mobile, and desktop customers across domains. Customer URLs, IDs, selectors, and workflows belong in configuration or Tests, never product-code special cases. Do not overbuild unrequested abstractions.
