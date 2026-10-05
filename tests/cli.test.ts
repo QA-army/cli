@@ -65,10 +65,10 @@ describe("QA.army public CLI contract", () => {
   it("reports unsupported parity commands as stable capability requests", async () => {
     const output: string[] = [];
     const io = { out: (value: string) => output.push(value), error: vi.fn() };
-    expect(await runCli(["memories", "list", "--project", `prj_${"1".repeat(32)}`, "--json"], {}, io)).toBe(2);
+    expect(await runCli(["projects", "get", "--project", `prj_${"1".repeat(32)}`, "--json"], {}, io)).toBe(2);
     expect(JSON.parse(output[0]!)).toMatchObject({
       status: "REQUEST_CAPABILITY",
-      capability: "memories list",
+      capability: "projects get",
       available: false,
       exit_code: 2,
     });
@@ -102,6 +102,13 @@ describe("QA.army public CLI contract", () => {
       request,
     )).toBe(0);
     expect(request.mock.calls[0]?.[0]).toBe(`https://api.qa.army/v1/runs/run_${"1".repeat(32)}`);
+  });
+
+  it('maps memory approval to a project-scoped mutation and rejects malformed memory IDs',async()=>{
+    const project='prj_'+'a'.repeat(32),memory='mem_'+'b'.repeat(32);const request=vi.fn<typeof fetch>(async()=>new Response(JSON.stringify({updated:true}),{status:200}));const io={out:vi.fn(),error:vi.fn()};
+    expect(await runCli(['memories','approve','--project',project,'--memory',memory,'--version','2'],{QA_ARMY_ACCESS_TOKEN:'injected-token'},io,request)).toBe(0);
+    expect(request.mock.calls[0]![0]).toBe(`https://api.qa.army/v1/projects/${project}/memory/${memory}`);expect(JSON.parse(String(request.mock.calls[0]![1]!.body))).toEqual({revision:2,decision:'APPROVED'});
+    expect(await runCli(['memories','archive','--project',project,'--memory','bad','--version','2'],{QA_ARMY_ACCESS_TOKEN:'injected-token'},io,request)).toBe(1);expect(request).toHaveBeenCalledTimes(1);
   });
 
   it("never reads or sends native credentials for an alternate API origin", async () => {

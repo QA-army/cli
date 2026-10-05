@@ -29,7 +29,6 @@ variants remain unavailable.
 | Project lifecycle | `projects get`, `projects update`, `projects delete` |
 | Environments | `projects environments`, `environments-create`, `environments-delete` |
 | Project credentials/files | `projects credentials`, `credentials-create`, `files` |
-| Memory | `memories list`, `memories create`, `memories delete` |
 | Test Groups | `groups delete`, `groups add-test`, `groups remove-test` |
 | Test toggles | `tests enable`, `tests disable` |
 | Group/mobile variants | `tests run --group`, platform/app/environment flags |
@@ -38,3 +37,9 @@ variants remain unavailable.
 
 Do not emulate these operations with unrelated endpoints. Return the stable
 capability receipt so product work can add the correct server-owned contract.
+
+## Product memory (release validation pending)
+
+Use `qa-army memories list --project prj_...` to read scoped knowledge. `create` accepts `--input` JSON; `update`, `approve`, `reject`, and `archive` require `--memory mem_... --version N`. `settings` accepts `{ "auto_learn": true }`; `graph`, `summary`, `import`, and `history` use the same Project. `clear` archives Project memory and disables automatic updates.
+
+Use an authenticated user session or profile API key. Setup-only WorkOS agent credentials do not authorize memory management. Treat observations as historical evidence, requirements as intended behavior, and document imports as proposals requiring review. Never store credentials. Memory usage does not establish correctness or prove improvement.
