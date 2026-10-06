@@ -12,7 +12,7 @@ import { WorkosAgentAccessTokenProvider } from "./agent-access-token.js";
 import { WorkosAgentRegistrationClient, type AgentRegistrationProtocol } from "./workos-agent-registration.js";
 import { setupProject } from "./setup.js";
 
-export const QA_ARMY_CLI_VERSION = "0.2.4";
+export const QA_ARMY_CLI_VERSION = "0.2.5";
 export const QA_ARMY_API_ORIGIN = "https://api.qa.army";
 export const CAPABILITY_REQUEST_EXIT_CODE = 2;
 
