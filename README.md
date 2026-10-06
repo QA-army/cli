@@ -30,6 +30,20 @@ Packaging changes also require `npm run verify:public`. Keep Linux, macOS, and W
 
 Codex: open this repo folder as the project and select Worktree from `main`. `.codex/environments/environment.toml` provides setup, cleanup, and actions; dependency installation is explicit.
 
+## Workspace invitations
+
+Workspace owners can inspect and manage invitations through the same Product API as the app:
+
+```sh
+qa-army invitations list --workspace wsp_...
+qa-army invitations revoke --workspace wsp_... --invitation inv_...
+qa-army invitations resend --workspace wsp_... --invitation inv_... --request-key resend-invite-001
+```
+
+Resend sends a replacement invitation and invalidates the old link. Reuse the same request key after an uncertain response; do not generate a new key just to retry. These commands require an owner-authorized user session or profile API key; restricted agent setup credentials do not gain membership-management permission.
+
+Recipients inspect and accept the email link at `https://app.qa.army/invitations/<invitation_id>` after signing in with their invited email. Recipient endpoints require verified Cognito identity and explicit human acceptance, so CLI commands do not accept invitations on another person's behalf. The lifecycle API is coordinated with [platform PR #63](https://github.com/QA-army/platform/pull/63) and remains **DOGFOOD-PENDING** until that release is verified.
+
 ## Product memory
 
 Memory management is undergoing release validation. Use a user session or profile API key; setup-only WorkOS credentials are restricted. Review evidence before approving proposals and keep credentials in Test Accounts. Published memory assists Test creation and individual Run actions; saved assertions still verify current behavior.
