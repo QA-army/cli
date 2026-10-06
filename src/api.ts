@@ -97,7 +97,7 @@ export class VenkatApi {
     version?: number,
     idempotencyKey?: string,
   ): Promise<unknown> {
-    return this.call(path, method, body, method === "POST" ? idempotencyKey ?? randomUUID() : undefined, version);
+    return this.call(path, method, body, idempotencyKey ?? (method === "POST" ? randomUUID() : undefined), version);
   }
 
   private async call(

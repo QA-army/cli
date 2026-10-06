@@ -20,6 +20,7 @@ const runWorkspace = "/workspace";
 const capabilityRequestBase = "https://github.com/QA-army/cli/issues/new";
 
 const supportedCommands = [
+  "prs list", "prs get", "prs cancel", "prs rerun", "prs promote", "prs settings", "prs configure", "prs usage",
   "auth agent-register", "auth status", "auth logout", "status", "logout", "signout",
   "setup", "create test", "workspaces list", "workspaces create", "workspaces get",
   "builds list", "builds reserve", "builds complete",
@@ -48,6 +49,7 @@ const requestedCommands = [
 ] as const;
 
 const apiActions: Readonly<Record<string, readonly string[]>> = {
+  prs: ["list", "get", "cancel", "rerun", "promote", "settings", "configure", "usage"],
   builds: ["list", "reserve", "complete"],
   memories: ["list", "create", "update", "approve", "reject", "archive", "delete", "clear", "settings", "graph", "summary", "import", "history"],
   workspaces: ["list", "create", "get", "update"],
@@ -355,6 +357,16 @@ async function executeTestRun(api: VenkatApi, args: readonly string[], io: CliIo
 async function execute(api: VenkatApi, resource: string, action: string, flags: ReadonlyMap<string, string>) {
   const input = () => jsonObject(required(flags, "--input"));
   const version = () => positiveInteger(required(flags, "--version"), "--version");
+  if(resource==='prs'){
+    if(action==='list'){onlyFlags(flags,['--project']);return api.operation(`/v1/projects/${id(flags,'--project','prj')}/pr-verifications`);}
+    if(action==='usage'){onlyFlags(flags,['--workspace']);return api.operation(`/v1/workspaces/${id(flags,'--workspace','wsp')}/pr-usage`);}
+    if(action==='settings'){onlyFlags(flags,['--integration']);return api.operation(`/v1/integrations/${id(flags,'--integration','int')}/dynamic-tests`);}
+    if(action==='get'){onlyFlags(flags,['--verification']);return api.operation(`/v1/pr-verifications/${id(flags,'--verification','prv')}`);}
+    onlyFlags(flags,action==='configure'?['--integration','--input','--request-key']:action==='promote'?['--verification','--test','--group','--request-key']:['--verification','--request-key']);
+    const key=required(flags,'--request-key');if(!/^[A-Za-z0-9_.:-]{8,128}$/.test(key))throw new Error('--request-key must be 8-128 safe characters');
+    if(action==='configure')return api.operation(`/v1/integrations/${id(flags,'--integration','int')}/dynamic-tests`,'PUT',input(),undefined,key);
+    return api.operation(`/v1/pr-verifications/${id(flags,'--verification','prv')}/${action}`,'POST',action==='promote'?{test_id:id(flags,'--test','tst'),group_id:id(flags,'--group','tgr')}:{},undefined,key);
+  }
   if(resource==='memories'){
     const path=`/v1/projects/${id(flags,'--project','prj')}/memory`;
     if(['list','graph','summary'].includes(action)){onlyFlags(flags,['--project']);return api.operation(path+(action==='list'?'':`/${action}`));}
@@ -489,6 +501,7 @@ function helpText(subject: readonly string[]): string {
   }
   const detail: Record<string, string> = {
     builds: "Usage: qa-army builds <list|reserve|complete> [--project prj_...] [--input JSON --request-key KEY] [--build nbd_...]",
+    prs: "Usage: qa-army prs <list|get|cancel|rerun|promote|settings|configure|usage> --project prj_... | --verification prv_... | --integration int_... | --workspace wsp_... [--input JSON] [--test tst_... --group tgr_...] [--request-key KEY]. Pilot only. Reruns may consume up to three new Runs; planning is included.",
     memories: "Usage: qa-army memories <list|create|update|approve|reject|archive|clear|settings|graph|summary|import|history> --project prj_... [--input JSON] [--memory mem_... --version N]",
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
     setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
@@ -527,15 +540,15 @@ function required(flags: ReadonlyMap<string, string>, name: string) {
   return value;
 }
 
-function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd") {
+function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int") {
   return validateId(required(flags, name), prefix, name);
 }
 
-function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd") {
+function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int") {
   return encodeURIComponent(rawId(flags, name, prefix));
 }
 
-function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd", label: string) {
+function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int", label: string) {
   if (!new RegExp(`^${prefix}_[a-f0-9]{32}$`).test(value)) throw new Error(`${label} is invalid`);
   return value;
 }

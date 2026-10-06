@@ -39,3 +39,19 @@ Memory management is undergoing release validation. Use a user session or profil
 `builds list --project prj_...`, `builds reserve --project prj_... --input JSON --request-key KEY`, and `builds complete --build nbd_...` use the canonical Product API. Reserve metadata is `{ "filename": "Example.app.zip", "platform": "ios", "size": 123, "sha256": "<64 lowercase hex characters>" }`. Android uses `platform: "android"` and `.apk`; simulator `.app.tar.gz` and `.app.tgz` are also accepted. Maximum upload size is 512 MiB.
 
 Use a user session or profile API key; agent setup credentials cannot register builds. PUT the exact original file to the reservation's short-lived upload URL with its supplied headers, without your Product bearer token. Complete registration to verify its checksum and size. Keep the same request key for an ambiguous reserve retry. Registered files are immutable and do not prove native execution or a passing Run.
+
+### Dynamic PR Tests pilot
+
+`prs` commands target the assisted, **DOGFOOD-PENDING** pilot. They require a supported profile credential and Workspace access. Restricted agent setup credentials do not gain PR-management permissions automatically.
+
+```sh
+qa-army prs list --project prj_...
+qa-army prs get --verification prv_...
+qa-army prs settings --integration int_...
+qa-army prs usage --workspace wsp_...
+qa-army prs configure --integration int_... --request-key configure-pr-001 --input '{"enabled":true,"max_tests":3,"test_account_ids":[],"sandbox_confirmed":true}'
+qa-army prs cancel --verification prv_... --request-key cancel-pr-001
+qa-army prs promote --verification prv_... --test tst_... --group tgr_... --request-key promote-pr-001
+```
+
+Enable only after configuring the matching Vercel Project and confirming sandbox safety. Planning is included; each completed generated Test consumes one shared Workspace Run. `prs rerun --verification prv_... --request-key rerun-pr-001` explicitly creates a new attempt and may consume up to three new Runs. Reuse a request key after an uncertain response; do not automatically rerun ambiguous mutations. No applicable coverage is not a passing result.

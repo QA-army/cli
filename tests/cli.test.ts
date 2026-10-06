@@ -27,6 +27,16 @@ function emptyAgentCredentialStore(overrides: Partial<AgentCredentialStore> = {}
 }
 
 describe("QA.army public CLI contract", () => {
+  it("preserves PR mutation keys, validates selectors, and sends only REST settings",async()=>{
+    const request=vi.fn<typeof fetch>(async()=>new Response(JSON.stringify({enabled:false}),{status:200}));
+    const io={out:vi.fn(),error:vi.fn()};const integration='int_'+'a'.repeat(32);
+    const args=['prs','configure','--integration',integration,'--input',JSON.stringify({enabled:false,max_tests:3,test_account_ids:[],sandbox_confirmed:false}),'--request-key','stable-pr-key'];
+    expect(await runCli(args,{QA_ARMY_ACCESS_TOKEN:'private-token'},io,request)).toBe(0);
+    expect(request.mock.calls[0]?.[0]).toBe(`https://api.qa.army/v1/integrations/${integration}/dynamic-tests`);
+    expect(request.mock.calls[0]?.[1]).toMatchObject({method:'PUT',headers:{'idempotency-key':'stable-pr-key'}});
+    expect(await runCli(['prs','rerun','--verification','bad','--request-key','stable-pr-key'],{QA_ARMY_ACCESS_TOKEN:'private-token'},io,request)).toBe(1);
+    expect(request).toHaveBeenCalledTimes(1);expect(JSON.stringify(io.out.mock.calls)).not.toContain('private-token');
+  });
   it("provides help, version, and production defaults without reading credentials", async () => {
     const output: string[] = [];
     const io = { out: (value: string) => output.push(value), error: vi.fn() };
