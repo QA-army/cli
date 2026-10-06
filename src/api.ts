@@ -7,7 +7,8 @@ export interface RunReceipt {
   readonly test_group_id: string | null;
   readonly test_id: string;
   readonly run_url: string;
-  readonly context_schema_version: 1 | 2 | 3 | 4;
+  readonly context_schema_version: 1 | 2 | 3 | 4 | 5;
+  readonly journey?: Readonly<Record<string, unknown>>;
   readonly context_hash: string;
   readonly resolved_at: string;
   readonly cancellation_requested_at: string | null;
@@ -169,7 +170,7 @@ async function apiFailure(response: Response): Promise<Error> {
 
 function parseRun(value: unknown): RunReceipt {
   const run = record(value);
-  if (!isStatus(run.status) || (run.context_schema_version !== 1 && run.context_schema_version !== 2 && run.context_schema_version !== 3 && run.context_schema_version !== 4)) throw new Error("QA.army returned an invalid Run receipt");
+  if (!isStatus(run.status) || (run.context_schema_version !== 1 && run.context_schema_version !== 2 && run.context_schema_version !== 3 && run.context_schema_version !== 4 && run.context_schema_version !== 5)) throw new Error("QA.army returned an invalid Run receipt");
   const hash = string(run.context_hash);
   if (!/^sha256:[a-f0-9]{64}$/.test(hash)) throw new Error("QA.army returned an invalid Run receipt");
   return {
@@ -177,6 +178,7 @@ function parseRun(value: unknown): RunReceipt {
     project_id: string(run.project_id), test_group_id: run.test_group_id === null ? null : string(run.test_group_id),
     test_id: string(run.test_id), run_url: runUrl(run.run_url, run),
     context_schema_version: run.context_schema_version, context_hash: hash,
+    ...(run.journey ? {journey:record(run.journey)} : {}),
     resolved_at: string(run.resolved_at),
     cancellation_requested_at: nullableString(run.cancellation_requested_at),
     completed_at: nullableString(run.completed_at), outcome_summary: nullableString(run.outcome_summary),
