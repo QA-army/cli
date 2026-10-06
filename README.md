@@ -40,6 +40,8 @@ Memory management is undergoing release validation. Use a user session or profil
 
 Use a user session or profile API key; agent setup credentials cannot register builds. PUT the exact original file to the reservation's short-lived upload URL with its supplied headers, without your Product bearer token. Complete registration to verify its checksum and size. Keep the same request key for an ambiguous reserve retry. Registered files are immutable and do not prove native execution or a passing Run.
 
+The native execution delivery adds an optional `native_target` to saved Test JSON supplied through `tests create` or `tests update` with `--input`: `{ "build_id": "nbd_...", "profile_id": "android-pixel9pro-15" }`. The iOS profile is `ios-iphone16pro-18.2`. The build must be registered in the Test's Project and match the profile platform. Omitted selection on an update preserves the existing binding; explicit `null` clears it. Each Run freezes the selected original bytes and profile. This contract is pending the platform release; complete native Run execution remains under verification.
+
 ### Dynamic PR Tests pilot
 
 `prs` commands target the assisted, **DOGFOOD-PENDING** pilot. They require a supported profile credential and Workspace access. Restricted agent setup credentials do not gain PR-management permissions automatically.
