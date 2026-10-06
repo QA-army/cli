@@ -27,7 +27,7 @@ function emptyAgentCredentialStore(overrides: Partial<AgentCredentialStore> = {}
 }
 
 describe("QA.army public CLI contract", () => {
-  it.each([1, 2, 3, 4])("reads RunContext v%i without changing the server verdict", async context_schema_version => {
+  it.each([1, 2, 3, 4, 5])("reads RunContext v%i without changing the server verdict", async context_schema_version => {
     const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ run: { ...runObject("READY"), context_schema_version } })));
     const io = { out: vi.fn(), error: vi.fn() };
     expect(await runCli(["runs", "create", "--test", `tst_${"4".repeat(32)}`], { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(0);
@@ -64,9 +64,9 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["--version"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["projects"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["api-keys"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
-    expect(output[0]).toContain("QA.army CLI 0.2.7");
+    expect(output[0]).toContain("QA.army CLI 0.2.8");
     expect(output[0]).toContain("https://api.qa.army/v1");
-    expect(output[1]).toBe("0.2.7");
+    expect(output[1]).toBe("0.2.8");
     expect(output[2]).toContain("qa-army projects");
     expect(output[3]).toContain("qa-army api-keys");
     expect(profileStore.get).not.toHaveBeenCalled();
@@ -111,7 +111,7 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["capabilities", "--json"], {}, { out: (value) => output.push(value), error: vi.fn() })).toBe(0);
     const inventory = JSON.parse(output[0]!);
     expect(inventory).toMatchObject({
-      cli_version: "0.2.7",
+      cli_version: "0.2.8",
       status: "AVAILABLE",
       api_base_url: "https://api.qa.army/v1",
       openapi_url: "https://api.qa.army/v1/openapi.json",
