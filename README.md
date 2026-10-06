@@ -5,7 +5,7 @@
 ## Start
 
 ```sh
-npm install -g https://github.com/QA-army/cli/releases/download/v0.2.4/qa-army-cli-0.2.4.tgz
+npm install -g https://github.com/QA-army/cli/releases/download/v0.2.5/qa-army-cli-0.2.5.tgz
 qa-army auth agent-register --email you@example.com
 qa-army status --json
 qa-army capabilities

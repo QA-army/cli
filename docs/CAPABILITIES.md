@@ -10,7 +10,7 @@ keeps recognized gaps visible as `[request capability]`.
 | Tests | List/get/create/update/archive/delete, authored steps, remote run | Enable/disable shortcuts, local/group/environment/mobile variants |
 | Runs | List/create/get/start/watch/wait/cancel | Cross-Project aggregate queries |
 | Context | — | Memories |
-| Mobile | Mobile Project metadata | App upload and mobile artifact selection |
+| Mobile | Mobile Projects and immutable build list/reserve/complete | Native artifact selection and execution |
 | Automation | Durable cloud Run primitives | CI orchestration and dynamic PR agents |
 
 Run `qa-army capabilities --json` for the exact versioned inventory. A missing
