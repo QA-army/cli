@@ -51,7 +51,7 @@ const requestedCommands = [
 const apiActions: Readonly<Record<string, readonly string[]>> = {
   prs: ["list", "get", "cancel", "rerun", "promote", "settings", "configure", "usage"],
   builds: ["list", "reserve", "complete"],
-  memories: ["list", "create", "update", "approve", "reject", "archive", "delete", "clear", "settings", "graph", "summary", "import", "history"],
+  memories: ["questions", "answer", "list", "create", "update", "approve", "reject", "archive", "delete", "clear", "settings", "graph", "summary", "import", "history"],
   workspaces: ["list", "create", "get", "update"],
   projects: ["list", "create", "star", "unstar"],
   members: ["list"],
@@ -369,6 +369,8 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
   }
   if(resource==='memories'){
     const path=`/v1/projects/${id(flags,'--project','prj')}/memory`;
+    if(action==='questions'){onlyFlags(flags,['--project','--day']);const day=flags.get('--day');if(day&&!/^\d{4}-\d{2}-\d{2}$/.test(day))throw new Error('--day must use YYYY-MM-DD');return api.operation(path+'/clarifications'+(day?'/'+day:''));}
+    if(action==='answer'){onlyFlags(flags,['--project','--input']);return api.operation(path+'/clarifications','POST',input());}
     if(['list','graph','summary'].includes(action)){onlyFlags(flags,['--project']);return api.operation(path+(action==='list'?'':`/${action}`));}
     if(action==='clear'){onlyFlags(flags,['--project']);return api.operation(path,'DELETE');}
     if(action==='history'){onlyFlags(flags,['--project']);return api.operation(path+'/history','POST',{});}
@@ -502,7 +504,7 @@ function helpText(subject: readonly string[]): string {
   const detail: Record<string, string> = {
     builds: "Usage: qa-army builds <list|reserve|complete> [--project prj_...] [--input JSON --request-key KEY] [--build nbd_...]",
     prs: "Usage: qa-army prs <list|get|cancel|rerun|promote|settings|configure|usage> --project prj_... | --verification prv_... | --integration int_... | --workspace wsp_... [--input JSON] [--test tst_... --group tgr_...] [--request-key KEY]. Pilot only. Reruns may consume up to three new Runs; planning is included.",
-    memories: "Usage: qa-army memories <list|create|update|approve|reject|archive|clear|settings|graph|summary|import|history> --project prj_... [--input JSON] [--memory mem_... --version N]",
+    memories: "Usage: qa-army memories <questions|answer|list|create|update|approve|reject|archive|clear|settings|graph|summary|import|history> --project prj_... [--input JSON] [--memory mem_... --version N]",
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
     setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
     workspaces: "Usage: qa-army workspaces <list|create|get|update> [options]",
