@@ -22,6 +22,7 @@ const capabilityRequestBase = "https://github.com/QA-army/cli/issues/new";
 const supportedCommands = [
   "auth agent-register", "auth status", "auth logout", "status", "logout", "signout",
   "setup", "create test", "workspaces list", "workspaces create", "workspaces get",
+  "builds list", "builds reserve", "builds complete",
   "workspaces update", "projects list", "projects create", "projects star", "projects unstar",
   "members list", "invitations create", "groups list", "groups get", "groups create",
   "groups update", "tests list", "tests get", "tests create", "tests update", "tests archive",
@@ -47,6 +48,7 @@ const requestedCommands = [
 ] as const;
 
 const apiActions: Readonly<Record<string, readonly string[]>> = {
+  builds: ["list", "reserve", "complete"],
   memories: ["list", "create", "update", "approve", "reject", "archive", "delete", "clear", "settings", "graph", "summary", "import", "history"],
   workspaces: ["list", "create", "get", "update"],
   projects: ["list", "create", "star", "unstar"],
@@ -364,6 +366,14 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
     return api.operation(recordPath,action==='update'?'PATCH':'POST',action==='update'?{...input(),revision:version()}:{revision:version(),decision:action==='approve'?'APPROVED':action==='reject'?'REJECTED':'ARCHIVED'});
   }
   switch (`${resource}.${action}`) {
+    case "builds.list": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/builds`);
+    case "builds.reserve": {
+      onlyFlags(flags, ["--project", "--input", "--request-key"]);
+      const key = required(flags, "--request-key");
+      if (!/^[A-Za-z0-9_.:-]{8,128}$/.test(key)) throw new Error("--request-key must be 8-128 safe characters");
+      return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/builds`, "POST", input(), undefined, key);
+    }
+    case "builds.complete": onlyFlags(flags, ["--build"]); return api.operation(`/v1/builds/${id(flags, "--build", "nbd")}/complete`, "POST", {});
     case "workspaces.list": onlyFlags(flags, []); return api.operation("/v1/workspaces");
     case "workspaces.create": onlyFlags(flags, ["--input"]); return api.operation("/v1/workspaces", "POST", input());
     case "workspaces.get": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}`);
@@ -478,6 +488,7 @@ function helpText(subject: readonly string[]): string {
     return `qa-army ${topic}\n\n[request capability] Recognized for parity, but not backed by a production QA.army API.\nRun: qa-army request capability "${topic}"`;
   }
   const detail: Record<string, string> = {
+    builds: "Usage: qa-army builds <list|reserve|complete> [--project prj_...] [--input JSON --request-key KEY] [--build nbd_...]",
     memories: "Usage: qa-army memories <list|create|update|approve|reject|archive|clear|settings|graph|summary|import|history> --project prj_... [--input JSON] [--memory mem_... --version N]",
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
     setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
@@ -516,15 +527,15 @@ function required(flags: ReadonlyMap<string, string>, name: string) {
   return value;
 }
 
-function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem") {
+function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd") {
   return validateId(required(flags, name), prefix, name);
 }
 
-function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem") {
+function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd") {
   return encodeURIComponent(rawId(flags, name, prefix));
 }
 
-function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem", label: string) {
+function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd", label: string) {
   if (!new RegExp(`^${prefix}_[a-f0-9]{32}$`).test(value)) throw new Error(`${label} is invalid`);
   return value;
 }

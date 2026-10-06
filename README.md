@@ -33,3 +33,9 @@ Codex: open this repo folder as the project and select Worktree from `main`. `.c
 ## Product memory
 
 Memory management is undergoing release validation. Use a user session or profile API key; setup-only WorkOS credentials are restricted. Review evidence before approving proposals and keep credentials in Test Accounts. Published memory assists Test creation and individual Run actions; saved assertions still verify current behavior.
+
+## Native build registration
+
+`builds list --project prj_...`, `builds reserve --project prj_... --input JSON --request-key KEY`, and `builds complete --build nbd_...` use the canonical Product API. Reserve metadata is `{ "filename": "Example.app.zip", "platform": "ios", "size": 123, "sha256": "<64 lowercase hex characters>" }`. Android uses `platform: "android"` and `.apk`; simulator `.app.tar.gz` and `.app.tgz` are also accepted. Maximum upload size is 512 MiB.
+
+Use a user session or profile API key; agent setup credentials cannot register builds. PUT the exact original file to the reservation's short-lived upload URL with its supplied headers, without your Product bearer token. Complete registration to verify its checksum and size. Keep the same request key for an ambiguous reserve retry. Registered files are immutable and do not prove native execution or a passing Run.
