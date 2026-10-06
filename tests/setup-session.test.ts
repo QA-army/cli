@@ -40,7 +40,7 @@ describe('opt-in setup session',()=>{
    await saved.set(proof);expect(entry.setPassword).toHaveBeenCalledOnce();
  });
  it('serializes concurrent credential initialization without overwriting the winner',async()=>{
-   const directory=await mkdtemp(join(tmpdir(),'qa-setup-lock-'));let persisted:string|null=null;
+   const directory=await mkdtemp(join(tmpdir(),'qa-setup-lock-'));let persisted:string|undefined;
    const entry={getPassword:vi.fn(async()=>persisted),setPassword:vi.fn(async(value:string)=>{persisted=value;}),deleteCredential:vi.fn()};
    try{
      const a=new NativeSetupCredentialStore('https://example.com',async()=>entry,directory);
