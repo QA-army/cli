@@ -12,7 +12,7 @@ import { WorkosAgentAccessTokenProvider } from "./agent-access-token.js";
 import { WorkosAgentRegistrationClient, type AgentRegistrationProtocol } from "./workos-agent-registration.js";
 import { setupProject } from "./setup.js";
 
-export const QA_ARMY_CLI_VERSION = "0.2.5";
+export const QA_ARMY_CLI_VERSION = "0.2.6";
 export const QA_ARMY_API_ORIGIN = "https://api.qa.army";
 export const CAPABILITY_REQUEST_EXIT_CODE = 2;
 
@@ -515,7 +515,7 @@ function helpText(subject: readonly string[]): string {
     request: 'Usage: qa-army request capability "command or feature"',
   };
   if (subject[0] && detail[subject[0]]) return detail[subject[0]]!;
-  return `QA.army CLI ${QA_ARMY_CLI_VERSION}\n\nUsage: qa-army [options] <command>\n\nCommands:\n  auth           WorkOS agent registration and native credential lifecycle\n  status         Show safe authentication metadata\n  setup          Create/reuse a Project and Test, then run it to completion\n  workspaces     Manage Workspaces\n  projects       List, create, star, and unstar Projects\n  groups         Manage Test Groups\n  tests          Manage durable Tests and run them remotely\n  runs           List, create, start, wait for, inspect, and cancel Runs\n  api-keys       Manage profile API keys using an injected user token\n  capabilities   Print supported and request-capability commands\n  docs [topic]   Print agent-friendly CLI documentation metadata\n  request capability <name>\n                 Produce a stable request receipt for a missing capability\n\nOptions:\n  -V, --version  Print version\n  -h, --help     Show help\n  --json         Accepted on all commands; successful command output is JSON\n\nProduction API: ${QA_ARMY_API_ORIGIN}/v1\nDocumentation: https://qa.army/cli`;
+  return `QA.army CLI ${QA_ARMY_CLI_VERSION}\n\nUsage: qa-army [options] <command>\n\nCommands:\n  auth           WorkOS agent registration and native credential lifecycle\n  status         Show safe authentication metadata\n  setup          Create/reuse a Project and Test, then run it to completion\n  workspaces     Manage Workspaces\n  projects       List, create, star, and unstar Projects\n  groups         Manage Test Groups\n  tests          Manage durable Tests and run them remotely\n  runs           List, create, start, wait for, inspect, and cancel Runs\n  prs            Configure and inspect dynamic PR verification (assisted pilot)\n  api-keys       Manage profile API keys using an injected user token\n  capabilities   Print supported and request-capability commands\n  docs [topic]   Print agent-friendly CLI documentation metadata\n  request capability <name>\n                 Produce a stable request receipt for a missing capability\n\nOptions:\n  -V, --version  Print version\n  -h, --help     Show help\n  --json         Accepted on all commands; successful command output is JSON\n\nProduction API: ${QA_ARMY_API_ORIGIN}/v1\nDocumentation: https://qa.army/cli`;
 }
 
 function readFlags(args: readonly string[]): ReadonlyMap<string, string> {
