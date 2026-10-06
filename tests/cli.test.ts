@@ -27,6 +27,23 @@ function emptyAgentCredentialStore(overrides: Partial<AgentCredentialStore> = {}
 }
 
 describe("QA.army public CLI contract", () => {
+  it.each([1, 2, 3, 4])("reads RunContext v%i without changing the server verdict", async context_schema_version => {
+    const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ run: { ...runObject("READY"), context_schema_version } })));
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(["runs", "create", "--test", `tst_${"4".repeat(32)}`], { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(0);
+    expect(JSON.parse(io.out.mock.calls[0]![0]).context_schema_version).toBe(context_schema_version);
+  });
+  it("sends authored ACT expectations and independent manual primitives unchanged", async () => {
+    const steps = [
+      { type: "act", instruction: "Click Yearly", enabled: true, verification: { expectation: "Yearly selected", timeout_ms: 30000, checks: [{ query: "Billing period", equals: "Yearly" }] } },
+      { type: "assert", instruction: "Annual prices visible", enabled: true },
+      { type: "screenshot", instruction: "Capture prices", enabled: true },
+    ];
+    const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ test: { id: "saved" } })));
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(["tests", "create", "--project", `prj_${"a".repeat(32)}`, "--input", JSON.stringify({ steps })], { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(0);
+    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body)).steps).toEqual(steps);
+  });
   it("preserves PR mutation keys, validates selectors, and sends only REST settings",async()=>{
     const request=vi.fn<typeof fetch>(async()=>new Response(JSON.stringify({enabled:false}),{status:200}));
     const io={out:vi.fn(),error:vi.fn()};const integration='int_'+'a'.repeat(32);
@@ -47,9 +64,9 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["--version"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["projects"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["api-keys"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
-    expect(output[0]).toContain("QA.army CLI 0.2.6");
+    expect(output[0]).toContain("QA.army CLI 0.2.7");
     expect(output[0]).toContain("https://api.qa.army/v1");
-    expect(output[1]).toBe("0.2.6");
+    expect(output[1]).toBe("0.2.7");
     expect(output[2]).toContain("qa-army projects");
     expect(output[3]).toContain("qa-army api-keys");
     expect(profileStore.get).not.toHaveBeenCalled();
@@ -94,7 +111,7 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["capabilities", "--json"], {}, { out: (value) => output.push(value), error: vi.fn() })).toBe(0);
     const inventory = JSON.parse(output[0]!);
     expect(inventory).toMatchObject({
-      cli_version: "0.2.6",
+      cli_version: "0.2.7",
       status: "AVAILABLE",
       api_base_url: "https://api.qa.army/v1",
       openapi_url: "https://api.qa.army/v1/openapi.json",

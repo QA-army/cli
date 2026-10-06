@@ -7,7 +7,7 @@ export interface RunReceipt {
   readonly test_group_id: string | null;
   readonly test_id: string;
   readonly run_url: string;
-  readonly context_schema_version: 1 | 2 | 3;
+  readonly context_schema_version: 1 | 2 | 3 | 4;
   readonly context_hash: string;
   readonly resolved_at: string;
   readonly cancellation_requested_at: string | null;
@@ -169,7 +169,7 @@ async function apiFailure(response: Response): Promise<Error> {
 
 function parseRun(value: unknown): RunReceipt {
   const run = record(value);
-  if (!isStatus(run.status) || (run.context_schema_version !== 1 && run.context_schema_version !== 2 && run.context_schema_version !== 3)) throw new Error("QA.army returned an invalid Run receipt");
+  if (!isStatus(run.status) || (run.context_schema_version !== 1 && run.context_schema_version !== 2 && run.context_schema_version !== 3 && run.context_schema_version !== 4)) throw new Error("QA.army returned an invalid Run receipt");
   const hash = string(run.context_hash);
   if (!/^sha256:[a-f0-9]{64}$/.test(hash)) throw new Error("QA.army returned an invalid Run receipt");
   return {

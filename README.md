@@ -5,7 +5,7 @@
 ## Start
 
 ```sh
-npm install -g https://github.com/QA-army/cli/releases/download/v0.2.6/qa-army-cli-0.2.6.tgz
+npm install -g https://github.com/QA-army/cli/releases/download/v0.2.7/qa-army-cli-0.2.7.tgz
 qa-army auth agent-register --email you@example.com
 qa-army status --json
 qa-army capabilities
@@ -55,3 +55,7 @@ qa-army prs promote --verification prv_... --test tst_... --group tgr_... --requ
 ```
 
 Enable only after configuring the matching Vercel Project and confirming sandbox safety. Planning is included; each completed generated Test consumes one shared Workspace Run. `prs rerun --verification prv_... --request-key rerun-pr-001` explicitly creates a new attempt and may consume up to three new Runs. Reuse a request key after an uncertain response; do not automatically rerun ambiguous mutations. No applicable coverage is not a passing result.
+
+## ACT outcomes
+
+Saved ACT steps accept an optional `verification` object: `expectation` (text), `timeout_ms` (1000–120000, default 30000), and `checks` (up to eight `{ "query": "Visible value to read", "equals": "Exact value" }` entries). `equals` can be text, a number, or a boolean. The server freezes inferred expectations when omitted; ambiguous outcomes error before mutation. A dispatched action alone cannot pass. Explicit Assert and Screenshot steps keep their independent roles and order; screenshot-only Tests remain valid. Run receipts support context versions 1 through 4, including historical Runs.
