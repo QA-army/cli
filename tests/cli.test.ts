@@ -27,6 +27,16 @@ function emptyAgentCredentialStore(overrides: Partial<AgentCredentialStore> = {}
 }
 
 describe("QA.army public CLI contract", () => {
+  it("preserves PR mutation keys, validates selectors, and sends only REST settings",async()=>{
+    const request=vi.fn<typeof fetch>(async()=>new Response(JSON.stringify({enabled:false}),{status:200}));
+    const io={out:vi.fn(),error:vi.fn()};const integration='int_'+'a'.repeat(32);
+    const args=['prs','configure','--integration',integration,'--input',JSON.stringify({enabled:false,max_tests:3,test_account_ids:[],sandbox_confirmed:false}),'--request-key','stable-pr-key'];
+    expect(await runCli(args,{QA_ARMY_ACCESS_TOKEN:'private-token'},io,request)).toBe(0);
+    expect(request.mock.calls[0]?.[0]).toBe(`https://api.qa.army/v1/integrations/${integration}/dynamic-tests`);
+    expect(request.mock.calls[0]?.[1]).toMatchObject({method:'PUT',headers:{'idempotency-key':'stable-pr-key'}});
+    expect(await runCli(['prs','rerun','--verification','bad','--request-key','stable-pr-key'],{QA_ARMY_ACCESS_TOKEN:'private-token'},io,request)).toBe(1);
+    expect(request).toHaveBeenCalledTimes(1);expect(JSON.stringify(io.out.mock.calls)).not.toContain('private-token');
+  });
   it("provides help, version, and production defaults without reading credentials", async () => {
     const output: string[] = [];
     const io = { out: (value: string) => output.push(value), error: vi.fn() };
@@ -37,9 +47,9 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["--version"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["projects"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["api-keys"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
-    expect(output[0]).toContain("QA.army CLI 0.2.5");
+    expect(output[0]).toContain("QA.army CLI 0.2.6");
     expect(output[0]).toContain("https://api.qa.army/v1");
-    expect(output[1]).toBe("0.2.5");
+    expect(output[1]).toBe("0.2.6");
     expect(output[2]).toContain("qa-army projects");
     expect(output[3]).toContain("qa-army api-keys");
     expect(profileStore.get).not.toHaveBeenCalled();
@@ -84,7 +94,7 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["capabilities", "--json"], {}, { out: (value) => output.push(value), error: vi.fn() })).toBe(0);
     const inventory = JSON.parse(output[0]!);
     expect(inventory).toMatchObject({
-      cli_version: "0.2.5",
+      cli_version: "0.2.6",
       status: "AVAILABLE",
       api_base_url: "https://api.qa.army/v1",
       openapi_url: "https://api.qa.army/v1/openapi.json",
