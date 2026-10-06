@@ -68,3 +68,11 @@ Focused generation in the QA.army app can compose one ordinary Test from version
 Preserve the optional `journey` object when editing a generated Test. It records source Test/step IDs and versions, inferred transitions, unresolved prerequisites, and observed identity bindings. References such as `{{binding.game}}` use a value captured from a fresh earlier ACT or Verify observation; the final independent Verify compares the actual identity again. Never replace these with a guessed ID or an instruction to “remember” a game/account. RunContext v5 freezes the composition for that Run. Explicit Verify and Screenshot remain ordinary steps.
 
 A source changing during generation requires generating again. A missing or ambiguous identity produces `ERROR`; an observed identity mismatch produces `FAILED`. Graph retrieval and past receipts cannot make a new Run pass. Disabling journey generation leaves existing manual Tests and ACT verification available.
+
+## Daily product clarifications (release validation pending)
+
+Read the stable Project/UTC-day set with `qa-army memories questions --project prj_...` or MCP `memories.questions`. A set has three context-grounded questions with three choices each, or an exhausted empty state. Answer with `qa-army memories answer --project prj_... --input JSON` or `memories.answer`. The body contains `day`, `question_id`, expected `revision` (initially 0), zero-based `choice` (0–2), `skipped`, and optional `elaboration`. For a skip use `choice: null` and `skipped: true`.
+
+Answers are customer-declared intent and require owner review before publication, even when an owner answers. Corrections append history; stale concurrent answers return a conflict. Never infer customer intent or submit a suggested choice automatically. Published answers may be supplied to future generation; supply does not prove influence or improved results.
+
+To revisit a saved set, select its date in Memory, use CLI `memories questions --project prj_... --day YYYY-MM-DD`, or pass `day` to MCP `memories.questions`. The historical API is `GET /v1/projects/{projectId}/memory/clarifications/{day}`. Only existing sets are returned; prior answers remain correctable with revision checks.
