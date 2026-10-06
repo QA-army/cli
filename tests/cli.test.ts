@@ -93,6 +93,17 @@ describe("QA.army public CLI contract", () => {
     expect(inventory.request_capability).toContain("upload-app");
   });
 
+  it("reserves native builds with an explicit stable request key", async () => {
+    const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ build: { id: "registered" } }), { status: 201 }));
+    const io = { out: vi.fn(), error: vi.fn() };
+    const args = ["builds", "reserve", "--project", "prj_" + "a".repeat(32), "--input", JSON.stringify({ filename: "Example.apk", platform: "android", size: 100, sha256: "b".repeat(64) }), "--request-key", "stable-key"];
+    expect(await runCli(args, { QA_ARMY_ACCESS_TOKEN: "private-token" }, io, request)).toBe(0);
+    expect(request.mock.calls[0]?.[1]?.headers).toMatchObject({ "idempotency-key": "stable-key" });
+    expect(await runCli(args.slice(0, -2), { QA_ARMY_ACCESS_TOKEN: "private-token" }, io, request)).toBe(1);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(io.out.mock.calls)).not.toContain("private-token");
+  });
+
   it("uses the production API by default and accepts an injected access token", async () => {
     const request = vi.fn<typeof fetch>(async () => response());
     expect(await runCli(
