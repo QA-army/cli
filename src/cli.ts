@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { NativeSetupCredentialStore, SetupSessionClient, runInstantSetup, type SetupCredentialStore } from "./setup-session.js";
 import { VenkatApi, type CommandRuntime } from "./api.js";
 import { ExecutorInlineFunctionOnlyTransport, parseRunWebCommand, type RunWebTransport } from "./web-run-client.js";
 import {
@@ -22,7 +23,7 @@ const capabilityRequestBase = "https://github.com/QA-army/cli/issues/new";
 const supportedCommands = [
   "prs list", "prs get", "prs cancel", "prs rerun", "prs promote", "prs settings", "prs configure", "prs usage",
   "auth agent-register", "auth status", "auth logout", "status", "logout", "signout",
-  "setup", "create test", "workspaces list", "workspaces create", "workspaces get",
+  "setup", "setup prepare", "setup status", "create test", "workspaces list", "workspaces create", "workspaces get",
   "builds list", "builds reserve", "builds complete",
   "workspaces update", "projects list", "projects create", "projects star", "projects unstar",
   "members list", "invitations create", "groups list", "groups get", "groups create",
@@ -77,6 +78,7 @@ export async function runCli(
   agentAuth?: AgentAuthCommand,
   agentCredentialStore: AgentCredentialStore = new NativeAgentCredentialStore(),
   agentProtocol: AgentRegistrationProtocol = new WorkosAgentRegistrationClient(request),
+  setupStore?: SetupCredentialStore,
 ): Promise<number> {
   try {
     if (args.includes("--api-key")) {
@@ -164,9 +166,27 @@ export async function runCli(
     }
 
     const baseUrl = apiUrl(environment);
+    if (command[0] === "setup" && ["prepare", "status"].includes(command[1] ?? "")) {
+      const options = readFlags(command.slice(2));
+      onlyFlags(options, command[1] === "prepare" ? ["--app-url", "--project-name"] : ["--app-url"]);
+      const appUrl = required(options, "--app-url");
+      const client = new SetupSessionClient(baseUrl, setupStore ?? new NativeSetupCredentialStore(appUrl), request);
+      const receipt = command[1] === "prepare" ? await client.prepare(appUrl, required(options, "--project-name")) : await client.status();
+      io.out(JSON.stringify(receipt, null, 2));
+      return ["PREPARING", "READY"].includes(receipt.state) ? 0 : 1;
+    }
     if (command[0] === "setup") {
       const options = readFlags(command.slice(1));
-      onlyFlags(options, ["--app-url", "--project-name", "--input", "--workspace"]);
+      onlyFlags(options, ["--app-url", "--project-name", "--input", "--workspace", "--mode"]);
+      const mode = options.get("--mode") ?? "authenticated";
+      if (!["authenticated", "instant"].includes(mode)) throw new Error("Setup mode must be authenticated or instant");
+      if (mode === "instant") {
+        if (options.has("--workspace")) throw new Error("Instant setup cannot select an existing Workspace; use authenticated setup");
+        const appUrl = required(options, "--app-url");
+        return await runInstantSetup(new SetupSessionClient(baseUrl, setupStore ?? new NativeSetupCredentialStore(appUrl), request), {
+          appUrl, projectName: required(options, "--project-name"), test: jsonObject(required(options, "--input")),
+        }, receipt => io.out(JSON.stringify(receipt, null, 2)), request, commandRuntime);
+      }
       const credential = await claimedAgentCredential(environment, baseUrl, agentCredentialStore, agentProtocol);
       const receipt = await setupProject(new VenkatApi(baseUrl, credential, request, commandRuntime), {
         appUrl: required(options, "--app-url"),
@@ -506,7 +526,7 @@ function helpText(subject: readonly string[]): string {
     prs: "Usage: qa-army prs <list|get|cancel|rerun|promote|settings|configure|usage> --project prj_... | --verification prv_... | --integration int_... | --workspace wsp_... [--input JSON] [--test tst_... --group tgr_...] [--request-key KEY]. Pilot only. Reruns may consume up to three new Runs; planning is included.",
     memories: "Usage: qa-army memories <questions|answer|list|create|update|approve|reject|archive|clear|settings|graph|summary|import|history> --project prj_... [--input JSON] [--memory mem_... --version N]",
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
-    setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
+    setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...] [--mode authenticated|instant]\nExperimental: qa-army setup prepare --app-url <url> --project-name <name>; qa-army setup status --app-url <url>',
     workspaces: "Usage: qa-army workspaces <list|create|get|update> [options]",
     projects: "Usage: qa-army projects <list|create|star|unstar> [options]",
     groups: "Usage: qa-army groups <list|get|create|update> [options]",
