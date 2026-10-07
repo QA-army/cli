@@ -212,3 +212,27 @@ function successfulLauncher(
     }) as unknown as StdinOnlyChildProcess;
   };
 }
+
+it("authenticates staging using only staging claim, API and credential-store bindings", async () => {
+  const f = fixture();
+  const registered = await f.protocol.register("person@example.com");
+  vi.mocked(f.protocol.register).mockResolvedValue({ ...registered, verificationUri: `https://staging.qa.army/auth/agent/claim?token=${attemptToken}` });
+  const stageStore: AgentCredentialStore = { ...f.store, location: { service: "qa.army.cli", account: "agent-identity-staging" } };
+  const awaiting: unknown[] = [];
+  const command = new WorkosAgentAuthCommand(f.protocol, stageStore, f.codeReader, f.opener, f.request);
+  await command.registerAndClaim({ loginHint: "person@example.com", productApiBaseUrl: "https://staging.qa.army", onAwaitingUserCode: r => awaiting.push(r) });
+  expect(f.request.mock.calls[0]?.[0]).toBe("https://staging.qa.army/v1/session");
+  expect(awaiting[0]).toMatchObject({ verification_uri_origin: "https://staging.qa.army" });
+});
+
+it("rejects production vault and production claim links before stage credential exchange", async () => {
+  const f = fixture();
+  const input = { loginHint: "person@example.com", productApiBaseUrl: "https://staging.qa.army", onAwaitingUserCode: vi.fn() };
+  await expect(new WorkosAgentAuthCommand(f.protocol, f.store, f.codeReader, f.opener, f.request).registerAndClaim(input)).rejects.toThrow(/must match/);
+  expect(f.protocol.register).not.toHaveBeenCalled();
+  const stageStore: AgentCredentialStore = { ...f.store, location: { service: "qa.army.cli", account: "agent-identity-staging" } };
+  await expect(new WorkosAgentAuthCommand(f.protocol, stageStore, f.codeReader, f.opener, f.request).registerAndClaim(input)).rejects.toThrow(/different environment/);
+  expect(f.opener.open).not.toHaveBeenCalled();
+  expect(f.protocol.completeClaim).not.toHaveBeenCalled();
+  expect(f.request).not.toHaveBeenCalled();
+});

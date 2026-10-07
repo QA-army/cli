@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { agentEnvironments, agentEnvironmentForApi } from "./agent-environment.js";
 import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import {
@@ -18,7 +19,7 @@ const qaUserIdPattern = /^usr_[a-f0-9]{32}$/;
 export interface AgentAuthAwaitingUserCode {
   readonly status: "AWAITING_USER_CODE";
   readonly registration_id: string;
-  readonly verification_uri_origin: "https://app.qa.army";
+  readonly verification_uri_origin: (typeof agentEnvironments)[keyof typeof agentEnvironments]["claimOrigin"];
   readonly verification_uri_path: "/auth/agent/claim";
   readonly expires_at: string;
 }
@@ -64,8 +65,8 @@ export type LinuxPortalOpenUri = (uri: string) => Promise<void>;
 
 export class WorkosAgentAuthCommand implements AgentAuthCommand {
   constructor(
-    private readonly workos: AgentRegistrationProtocol = new WorkosAgentRegistrationClient(),
-    private readonly store: AgentCredentialStore = new NativeAgentCredentialStore(),
+    private readonly workos?: AgentRegistrationProtocol,
+    private readonly store?: AgentCredentialStore,
     private readonly codeReader: SecretUserCodeReader = new HiddenStdinUserCodeReader(),
     private readonly opener: VerificationUriOpener = new SystemVerificationUriOpener(),
     private readonly request: typeof fetch = fetch,
@@ -76,8 +77,17 @@ export class WorkosAgentAuthCommand implements AgentAuthCommand {
     readonly productApiBaseUrl: string;
     readonly onAwaitingUserCode: (receipt: AgentAuthAwaitingUserCode) => void;
   }): Promise<AgentAuthReceipt> {
-    const productApiBaseUrl = validatedProductApiBaseUrl(input.productApiBaseUrl);
-    const registration = await this.workos.register(input.loginHint);
+    const environment = agentEnvironmentForApi(input.productApiBaseUrl);
+    const productApiBaseUrl = agentEnvironments[environment].apiOrigin;
+    const workos = this.workos ?? new WorkosAgentRegistrationClient(this.request, 8_000, environment);
+    const store = this.store ?? new NativeAgentCredentialStore(undefined, environment);
+    if ((workos.environment && workos.environment !== environment) || store.location.account !== agentEnvironments[environment].agentAccount) {
+      throw new Error("Agent credentials and protocol must match the Product API environment");
+    }
+    const registration = await workos.register(input.loginHint);
+    if (validatedVerificationUri(registration.verificationUri).origin !== agentEnvironments[environment].claimOrigin) {
+      throw new Error("WorkOS returned a verification link for a different environment");
+    }
     await this.opener.open(registration.verificationUri);
     input.onAwaitingUserCode(awaitingReceipt(registration));
     const userCode = await this.codeReader.read();
@@ -85,9 +95,9 @@ export class WorkosAgentAuthCommand implements AgentAuthCommand {
 
     // Claim completion is deliberately called exactly once. A transport failure
     // is ambiguous and requires a fresh registration instead of an automatic replay.
-    const credential = await this.workos.completeClaim(registration, userCode);
-    await this.store.set(credential);
-    const exchanged = await this.workos.exchangeAssertion(credential.assertion);
+    const credential = await workos.completeClaim(registration, userCode);
+    await store.set(credential);
+    const exchanged = await workos.exchangeAssertion(credential.assertion);
     const qaUserId = await verifyAllowedProductCall(productApiBaseUrl, exchanged.accessToken, this.request);
     return {
       status: "AUTHENTICATED",
@@ -95,23 +105,9 @@ export class WorkosAgentAuthCommand implements AgentAuthCommand {
       qa_user_id: qaUserId,
       access_token_expires_in: exchanged.expiresIn,
       allowed_operation: "getSessionBootstrap",
-      credential_store: this.store.location,
+      credential_store: store.location,
     };
   }
-}
-
-function validatedProductApiBaseUrl(value: string): "https://api.qa.army" {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("The QA.army Product API origin is invalid");
-  }
-  if (
-    url.origin !== "https://api.qa.army" || (url.pathname !== "/" && url.pathname !== "") ||
-    url.search || url.hash || url.username || url.password
-  ) throw new Error("The QA.army Product API origin is invalid");
-  return "https://api.qa.army";
 }
 
 export class HiddenStdinUserCodeReader implements SecretUserCodeReader {
@@ -236,7 +232,7 @@ function awaitingReceipt(registration: AgentRegistration): AgentAuthAwaitingUser
   return {
     status: "AWAITING_USER_CODE",
     registration_id: registration.registrationId,
-    verification_uri_origin: "https://app.qa.army",
+    verification_uri_origin: uri.origin as AgentAuthAwaitingUserCode["verification_uri_origin"],
     verification_uri_path: uri.pathname as "/auth/agent/claim",
     expires_at: registration.verificationExpiresAt,
   };
@@ -250,7 +246,7 @@ function validatedVerificationUri(value: string): URL {
     throw new Error("WorkOS returned an invalid verification link");
   }
   if (
-    uri.origin !== "https://app.qa.army" || uri.pathname !== "/auth/agent/claim" || uri.hash ||
+    ![agentEnvironments.production.claimOrigin, agentEnvironments.staging.claimOrigin].some(origin => origin === uri.origin) || uri.username || uri.password || uri.pathname !== "/auth/agent/claim" || uri.hash ||
     uri.searchParams.size !== 1 || !/^(?:cat_|att_|cla_tkn_)[A-Za-z0-9_-]{20,128}$/.test(uri.searchParams.get("token") ?? "")
   ) throw new Error("WorkOS returned an invalid verification link");
   return uri;
@@ -263,6 +259,7 @@ async function verifyAllowedProductCall(baseUrl: string, accessToken: string, re
       method: "GET",
       headers: { accept: "application/json", authorization: `Bearer ${accessToken}` },
       cache: "no-store",
+      redirect: "error",
     });
   } catch {
     throw new Error("The QA.army agent session could not be verified");

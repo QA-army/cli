@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { agentEnvironments } from "./agent-environment.js";
 import type { ApiAccessTokenProvider } from "./api.js";
 import {
   NativeAgentCredentialStore,
@@ -21,7 +22,11 @@ export class WorkosAgentAccessTokenProvider implements ApiAccessTokenProvider {
     private readonly workos: AgentRegistrationProtocol = new WorkosAgentRegistrationClient(),
     private readonly now: () => number = Date.now,
     private initialCredential?: AgentCredential,
-  ) {}
+  ) {
+    if (workos.environment && store.location.account !== agentEnvironments[workos.environment].agentAccount) {
+      throw new Error("Agent credential store must match the WorkOS environment");
+    }
+  }
 
   async accessToken(): Promise<string> {
     if (this.cached && this.cached.expiresAt > this.now() + expirySkewMs) return this.cached.value;

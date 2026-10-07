@@ -147,6 +147,7 @@ export class VenkatApi {
   private authorizedRequest(url: string, init: RequestInit, accessToken: string): Promise<Response> {
     return this.request(url, {
       ...init,
+      redirect: "error",
       headers: { ...init.headers, authorization: `Bearer ${accessToken}` },
     });
   }

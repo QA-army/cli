@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
+import { agentEnvironments, type AgentEnvironment } from "./agent-environment.js";
 import type { AgentCredential } from "./agent-auth-store.js";
 
 export const WORKOS_AGENT_ISSUER = "https://heavenly-experience-04.authkit.app";
-const productClaimOrigin = "https://app.qa.army";
+
 const maximumResponseBytes = 32 * 1024;
 const registrationPattern = /^agent_reg_[A-Za-z0-9]{20,64}$/;
 const claimTokenPattern = /^clm_[A-Za-z0-9_-]{20,128}$/;
@@ -25,6 +26,7 @@ export interface ExchangedAgentToken {
 }
 
 export interface AgentRegistrationProtocol {
+  readonly environment?: AgentEnvironment;
   register(loginHint: string): Promise<AgentRegistration>;
   completeClaim(registration: AgentRegistration, userCode: string): Promise<AgentCredential>;
   exchangeAssertion(assertion: string): Promise<ExchangedAgentToken>;
@@ -32,6 +34,7 @@ export interface AgentRegistrationProtocol {
 }
 
 export type AgentRegistrationFailureCode =
+  | "NOT_CONFIGURED"
   | "INVALID_INPUT"
   | "DENIED"
   | "EXPIRED"
@@ -43,7 +46,7 @@ export class AgentRegistrationError extends Error {
   readonly attempts = 1;
 
   constructor(readonly code: AgentRegistrationFailureCode, readonly status: number | null) {
-    super("WorkOS agent registration could not be completed");
+    super(code === "NOT_CONFIGURED" ? "WorkOS staging Agent Registration is not advertised by the verified issuer; enable the existing staging registration configuration before claiming" : "WorkOS agent registration could not be completed");
     this.name = "AgentRegistrationError";
   }
 }
@@ -52,21 +55,28 @@ export class WorkosAgentRegistrationClient implements AgentRegistrationProtocol 
   constructor(
     private readonly request: FetchLike = fetch,
     private readonly timeoutMs = 8_000,
-  ) {}
+    readonly environment: AgentEnvironment = "production",
+  ) {
+    if (!Object.hasOwn(agentEnvironments, environment)) throw new Error("Unsupported agent environment");
+  }
 
   async register(loginHint: string): Promise<AgentRegistration> {
     const email = canonicalEmail(loginHint);
     if (!email) throw new AgentRegistrationError("INVALID_INPUT", null);
-    const payload = await this.jsonRequest(`${WORKOS_AGENT_ISSUER}/agent/identity`, {
+    if (this.environment === "staging") await this.requireStagingDiscovery();
+    const payload = await this.jsonRequest(`${agentEnvironments[this.environment].issuer}/agent/identity`, {
       type: "service_auth",
       login_hint: email,
     }, "register");
-    return parseRegistration(payload);
+    return parseRegistration(payload, agentEnvironments[this.environment].claimOrigin);
   }
 
   async completeClaim(registration: AgentRegistration, userCode: string): Promise<AgentCredential> {
+    if (!validVerificationUri(registration.verificationUri, agentEnvironments[this.environment].claimOrigin)) {
+      throw new AgentRegistrationError("INVALID_INPUT", null);
+    }
     if (!userCodePattern.test(userCode)) throw new AgentRegistrationError("INVALID_INPUT", null);
-    const payload = await this.jsonRequest(`${WORKOS_AGENT_ISSUER}/agent/identity/claim/complete`, {
+    const payload = await this.jsonRequest(`${agentEnvironments[this.environment].issuer}/agent/identity/claim/complete`, {
       claim_token: registration.claimToken,
       user_code: userCode,
     }, "complete");
@@ -81,7 +91,7 @@ export class WorkosAgentRegistrationClient implements AgentRegistrationProtocol 
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion,
     });
-    const payload = await this.requestOnce(`${WORKOS_AGENT_ISSUER}/oauth2/token`, {
+    const payload = await this.requestOnce(`${agentEnvironments[this.environment].issuer}/oauth2/token`, {
       method: "POST",
       headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
       body: form.toString(),
@@ -93,11 +103,30 @@ export class WorkosAgentRegistrationClient implements AgentRegistrationProtocol 
     if (!/^[A-Za-z0-9._~-]{20,4096}$/.test(refreshToken)) {
       throw new AgentRegistrationError("INVALID_INPUT", null);
     }
-    const payload = await this.jsonRequest(`${WORKOS_AGENT_ISSUER}/agent/identity`, {
+    const payload = await this.jsonRequest(`${agentEnvironments[this.environment].issuer}/agent/identity`, {
       type: "refresh",
       refresh_token: refreshToken,
     }, "refresh");
     return parseRefreshedCredential(payload);
+  }
+
+  private async requireStagingDiscovery(): Promise<void> {
+    const issuer = agentEnvironments.staging.issuer;
+    const payload = record(await this.requestOnce(`${issuer}/.well-known/oauth-authorization-server`, {
+      method: "GET", headers: { accept: "application/json" },
+    }, "register"));
+    const auth = payload.agent_auth;
+    if (payload.issuer !== issuer || payload.jwks_uri !== `${issuer}/oauth2/jwks` ||
+      !auth || typeof auth !== "object" || Array.isArray(auth)) {
+      throw new AgentRegistrationError("NOT_CONFIGURED", null);
+    }
+    const discovery = auth as Readonly<Record<string, unknown>>;
+    if (discovery.identity_endpoint !== `${issuer}/agent/identity` ||
+      discovery.claim_endpoint !== `${issuer}/agent/identity/claim` ||
+      discovery.skill !== `${issuer}/agent/auth.md` ||
+      !Array.isArray(discovery.identity_types_supported) || !discovery.identity_types_supported.includes("service_auth")) {
+      throw new AgentRegistrationError("NOT_CONFIGURED", null);
+    }
   }
 
   private jsonRequest(url: string, body: Readonly<Record<string, string>>, phase: RequestPhase): Promise<unknown> {
@@ -112,7 +141,7 @@ export class WorkosAgentRegistrationClient implements AgentRegistrationProtocol 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await this.request(url, { ...init, signal: controller.signal });
+      const response = await this.request(url, { ...init, redirect: "error", signal: controller.signal });
       if (!response.ok) {
         await response.body?.cancel().catch(() => undefined);
         throw new AgentRegistrationError(classify(response.status, phase), response.status);
@@ -129,7 +158,7 @@ export class WorkosAgentRegistrationClient implements AgentRegistrationProtocol 
 
 type RequestPhase = "register" | "complete" | "exchange" | "refresh";
 
-function parseRegistration(value: unknown): AgentRegistration {
+function parseRegistration(value: unknown, claimOrigin: string): AgentRegistration {
   const body = record(value);
   const claim = record(body.claim);
   const attempt = record(claim.attempt);
@@ -138,7 +167,7 @@ function parseRegistration(value: unknown): AgentRegistration {
     typeof claim.token !== "string" || !claimTokenPattern.test(claim.token) || !validTimestamp(claim.expires_at) ||
     typeof attempt.verification_uri !== "string" || !validTimestamp(attempt.expires_at)
   ) throw new AgentRegistrationError("INVALID_RESPONSE", 200);
-  const verificationUri = validVerificationUri(attempt.verification_uri);
+  const verificationUri = validVerificationUri(attempt.verification_uri, claimOrigin);
   if (!verificationUri) throw new AgentRegistrationError("INVALID_RESPONSE", 200);
   return {
     registrationId: body.id,
@@ -199,14 +228,14 @@ function parseAccessToken(value: unknown): ExchangedAgentToken {
   return { accessToken: body.access_token, expiresIn: body.expires_in };
 }
 
-function validVerificationUri(value: string): string | undefined {
+function validVerificationUri(value: string, claimOrigin: string): string | undefined {
   let uri: URL;
   try {
     uri = new URL(value);
   } catch {
     return undefined;
   }
-  if (uri.origin !== productClaimOrigin || uri.pathname !== "/auth/agent/claim" || uri.hash) return undefined;
+  if (uri.origin !== claimOrigin || uri.username || uri.password || uri.pathname !== "/auth/agent/claim" || uri.hash) return undefined;
   const token = uri.searchParams.get("token");
   if (uri.searchParams.size !== 1 || !token || !attemptTokenPattern.test(token)) return undefined;
   return uri.toString();
