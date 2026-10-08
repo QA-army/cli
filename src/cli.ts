@@ -11,6 +11,7 @@ import { NativeAgentCredentialStore, type AgentCredentialStore } from "./agent-a
 import { WorkosAgentAccessTokenProvider } from "./agent-access-token.js";
 import { WorkosAgentRegistrationClient, type AgentRegistrationProtocol } from "./workos-agent-registration.js";
 import { setupProject } from "./setup.js";
+import { memoryClarificationAnswer } from "./memory-clarification-answer.js";
 
 export const QA_ARMY_CLI_VERSION = "0.2.8";
 export const QA_ARMY_API_ORIGIN = "https://api.qa.army";
@@ -25,7 +26,7 @@ const supportedCommands = [
   "setup", "create test", "workspaces list", "workspaces create", "workspaces get",
   "builds list", "builds reserve", "builds complete",
   "workspaces update", "projects list", "projects create", "projects star", "projects unstar",
-  "members list", "invitations create", "groups list", "groups get", "groups create",
+  "members list", "invitations create", "invitations list", "invitations revoke", "invitations resend", "groups list", "groups get", "groups create",
   "groups update", "tests list", "tests get", "tests create", "tests update", "tests archive",
   "tests delete", "tests run", "runs list", "runs create", "runs get", "runs start",
   "runs watch", "runs wait", "runs cancel", "api-keys list", "api-keys create",
@@ -55,7 +56,7 @@ const apiActions: Readonly<Record<string, readonly string[]>> = {
   workspaces: ["list", "create", "get", "update"],
   projects: ["list", "create", "star", "unstar"],
   members: ["list"],
-  invitations: ["create"],
+  invitations: ["create", "list", "revoke", "resend"],
   groups: ["list", "get", "create", "update"],
   tests: ["list", "get", "create", "update", "archive", "delete", "run"],
   runs: ["list", "create", "get", "start", "watch", "wait", "cancel"],
@@ -370,7 +371,7 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
   if(resource==='memories'){
     const path=`/v1/projects/${id(flags,'--project','prj')}/memory`;
     if(action==='questions'){onlyFlags(flags,['--project','--day']);const day=flags.get('--day');if(day&&!/^\d{4}-\d{2}-\d{2}$/.test(day))throw new Error('--day must use YYYY-MM-DD');return api.operation(path+'/clarifications'+(day?'/'+day:''));}
-    if(action==='answer'){onlyFlags(flags,['--project','--input']);return api.operation(path+'/clarifications','POST',input());}
+    if(action==='answer'){onlyFlags(flags,['--project','--input']);return api.operation(path+'/clarifications','POST',memoryClarificationAnswer(input()));}
     if(['list','graph','summary'].includes(action)){onlyFlags(flags,['--project']);return api.operation(path+(action==='list'?'':`/${action}`));}
     if(action==='clear'){onlyFlags(flags,['--project']);return api.operation(path,'DELETE');}
     if(action==='history'){onlyFlags(flags,['--project']);return api.operation(path+'/history','POST',{});}
@@ -398,6 +399,16 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
     case "projects.unstar": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/star`, "DELETE");
     case "members.list": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/members`);
     case "invitations.create": onlyFlags(flags, ["--workspace", "--input"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations`, "POST", input());
+    case "invitations.list": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations`);
+    case "invitations.revoke":
+      onlyFlags(flags, ["--workspace", "--invitation"]);
+      return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations/${id(flags, "--invitation", "inv")}/revoke`, "POST", {});
+    case "invitations.resend": {
+      onlyFlags(flags, ["--workspace", "--invitation", "--request-key"]);
+      const key = required(flags, "--request-key");
+      if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(key)) throw new Error("--request-key must be 1-128 safe characters");
+      return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations/${id(flags, "--invitation", "inv")}/resend`, "POST", {}, undefined, key);
+    }
     case "groups.list": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/test-groups`);
     case "groups.create": onlyFlags(flags, ["--project", "--input"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/test-groups`, "POST", input());
     case "groups.get": onlyFlags(flags, ["--group"]); return api.operation(`/v1/test-groups/${id(flags, "--group", "tgr")}`);
@@ -508,6 +519,7 @@ function helpText(subject: readonly string[]): string {
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
     setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
     workspaces: "Usage: qa-army workspaces <list|create|get|update> [options]",
+    invitations: "Usage: qa-army invitations <create|list|revoke|resend> --workspace wsp_... [--input JSON] [--invitation inv_...] [--request-key KEY]. Owner access required. Resend requires a stable request key; reuse it after an uncertain response. Recipients accept in the authenticated browser with their invited email.",
     projects: "Usage: qa-army projects <list|create|star|unstar> [options]",
     groups: "Usage: qa-army groups <list|get|create|update> [options]",
     tests: "Usage: qa-army tests <list|get|create|update|archive|delete|run> [options]",
@@ -542,15 +554,15 @@ function required(flags: ReadonlyMap<string, string>, name: string) {
   return value;
 }
 
-function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int") {
+function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv") {
   return validateId(required(flags, name), prefix, name);
 }
 
-function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int") {
+function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv") {
   return encodeURIComponent(rawId(flags, name, prefix));
 }
 
-function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int", label: string) {
+function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv", label: string) {
   if (!new RegExp(`^${prefix}_[a-f0-9]{32}$`).test(value)) throw new Error(`${label} is invalid`);
   return value;
 }
