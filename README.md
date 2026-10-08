@@ -42,7 +42,7 @@ qa-army invitations resend --workspace wsp_... --invitation inv_... --request-ke
 
 Resend sends a replacement invitation and invalidates the old link. Reuse the same request key after an uncertain response; do not generate a new key just to retry. These commands require an owner-authorized user session or profile API key; restricted agent setup credentials do not gain membership-management permission.
 
-Recipients inspect and accept the email link at `https://app.qa.army/invitations/<invitation_id>` after signing in with their invited email. Recipient endpoints require verified Cognito identity and explicit human acceptance, so CLI commands do not accept invitations on another person's behalf. The lifecycle API is coordinated with [platform PR #63](https://github.com/QA-army/platform/pull/63) and remains **DOGFOOD-PENDING** until that release is verified.
+Recipients inspect and accept the email link at `https://app.qa.army/invitations/<invitation_id>` after signing in with their invited email. Recipient endpoints require verified Cognito identity and explicit human acceptance, so CLI commands do not accept invitations on another person's behalf. The lifecycle API is coordinated with [platform PR #63](https://github.com/QA-army/platform/pull/63) and requires that platform release. Availability of the lifecycle operations is not yet verified.
 
 ## Product memory
 
