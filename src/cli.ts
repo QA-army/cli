@@ -21,6 +21,7 @@ const runWorkspace = "/workspace";
 const capabilityRequestBase = "https://github.com/QA-army/cli/issues/new";
 
 const supportedCommands = [
+  "connections request", "connections status", "connections cancel",
   "prs list", "prs get", "prs cancel", "prs rerun", "prs promote", "prs settings", "prs configure", "prs usage",
   "auth agent-register", "auth status", "auth logout", "status", "logout", "signout",
   "setup", "create test", "workspaces list", "workspaces create", "workspaces get",
@@ -50,6 +51,7 @@ const requestedCommands = [
 ] as const;
 
 const apiActions: Readonly<Record<string, readonly string[]>> = {
+  connections: ["request", "status", "cancel"],
   prs: ["list", "get", "cancel", "rerun", "promote", "settings", "configure", "usage"],
   builds: ["list", "reserve", "complete"],
   memories: ["questions", "answer", "list", "create", "update", "approve", "reject", "archive", "delete", "clear", "settings", "graph", "summary", "import", "history"],
@@ -356,6 +358,17 @@ async function executeTestRun(api: VenkatApi, args: readonly string[], io: CliIo
 }
 
 async function execute(api: VenkatApi, resource: string, action: string, flags: ReadonlyMap<string, string>) {
+  if (resource === "connections") {
+    if (action === "request") {
+      onlyFlags(flags, ["--project", "--request-key"]);
+      const key = required(flags, "--request-key");
+      if (!/^[A-Za-z0-9_.:-]{8,128}$/.test(key)) throw new Error("--request-key must contain 8–128 safe characters");
+      return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/integration-connect-requests`, "POST", {provider: "github"}, undefined, key);
+    }
+    onlyFlags(flags, action === "cancel" ? ["--request", "--request-key"] : ["--request"]);
+    const path = `/v1/integration-connect-requests/${id(flags, "--request", "icr")}`;
+    return action === "status" ? api.operation(path) : api.operation(`${path}/cancel`, "POST", {}, undefined, required(flags, "--request-key"));
+  }
   const input = () => jsonObject(required(flags, "--input"));
   const version = () => positiveInteger(required(flags, "--version"), "--version");
   if(resource==='prs'){
@@ -514,6 +527,7 @@ function helpText(subject: readonly string[]): string {
   }
   const detail: Record<string, string> = {
     builds: "Usage: qa-army builds <list|reserve|complete> [--project prj_...] [--input JSON --request-key KEY] [--build nbd_...]",
+    connections: "Usage: qa-army connections request --project prj_... --request-key KEY | status --request icr_... | cancel --request icr_... --request-key KEY. Returns a first-party owner review link; never connects a provider or grants permissions. Owner approval happens in the authenticated browser.",
     prs: "Usage: qa-army prs <list|get|cancel|rerun|promote|settings|configure|usage> --project prj_... | --verification prv_... | --integration int_... | --workspace wsp_... [--input JSON] [--test tst_... --group tgr_...] [--request-key KEY]. Pilot only. Reruns may consume up to three new Runs; planning is included.",
     memories: "Usage: qa-army memories <questions|answer|list|create|update|approve|reject|archive|clear|settings|graph|summary|import|history> --project prj_... [--input JSON] [--memory mem_... --version N]",
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
@@ -554,15 +568,15 @@ function required(flags: ReadonlyMap<string, string>, name: string) {
   return value;
 }
 
-function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv") {
+function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv" | "icr") {
   return validateId(required(flags, name), prefix, name);
 }
 
-function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv") {
+function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv" | "icr") {
   return encodeURIComponent(rawId(flags, name, prefix));
 }
 
-function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv", label: string) {
+function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv" | "icr", label: string) {
   if (!new RegExp(`^${prefix}_[a-f0-9]{32}$`).test(value)) throw new Error(`${label} is invalid`);
   return value;
 }
