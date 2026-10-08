@@ -37,6 +37,27 @@ qa-army setup --app-url https://example.com --project-name Example --input "$(ca
 
 ## Develop
 
+### Experimental instant setup
+
+**DOGFOOD-PENDING.** The new server capability is disabled pending email routing,
+governed signup/verification, private pre-signup reports, and release verification.
+The existing `setup` flow above remains the default; `--mode authenticated` selects
+it explicitly. No immutable download has been replaced for this experiment.
+
+The opt-in commands are `setup prepare --app-url <url> --project-name <name>`,
+`setup status --app-url <url>`, and
+`setup --mode instant --app-url <url> --project-name <name> --input <Test-JSON>`.
+Preparation never starts a Run, so authoring can proceed concurrently. Recovery
+credentials are saved in a separate native keyring entry before the first request.
+Keep the same application URL when resuming. After a lost response, read status;
+do not delete credentials, create another setup identity, or replay signup.
+
+Address conflicts and unavailable email return an explicit fallback to authenticated
+setup. That fallback provides today's capabilities; it does not promise automated
+email verification. Existing Runs must be reconciled before further mutations.
+
+### Local checks
+
 ```sh
 npm ci
 npm run validate
