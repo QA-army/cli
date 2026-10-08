@@ -27,6 +27,67 @@ function emptyAgentCredentialStore(overrides: Partial<AgentCredentialStore> = {}
 }
 
 describe("QA.army public CLI contract", () => {
+  describe("owner invitation lifecycle", () => {
+    const workspace = `wsp_${"1".repeat(32)}`;
+    const invitation = `inv_${"2".repeat(32)}`;
+    const env = { QA_ARMY_ACCESS_TOKEN: "owner-token" };
+    it.each(["list", "revoke", "resend"])("maps invitations %s to canonical Workspace REST", async (action) => {
+      const receipt = action === "list" ? { invitations: [] } : { invitation: { id: action === "resend" ? `inv_${"3".repeat(32)}` : invitation, status: action === "revoke" ? "revoked" : "pending" } };
+      const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(receipt)));
+      const io = { out: vi.fn(), error: vi.fn() };
+      const args = ["invitations", action, "--workspace", workspace, ...(action === "list" ? [] : ["--invitation", invitation]), ...(action === "resend" ? ["--request-key", "stable-invite-001"] : [])];
+      expect(await runCli(args, env, io, request)).toBe(0);
+      expect(request).toHaveBeenCalledOnce();
+      const [url, init] = request.mock.calls[0]!;
+      expect(url).toBe(`https://api.qa.army/v1/workspaces/${workspace}/invitations${action === "list" ? "" : `/${invitation}/${action}`}`);
+      expect(init?.method).toBe(action === "list" ? "GET" : "POST");
+      expect(init?.headers).toMatchObject({ authorization: "Bearer owner-token" });
+      expect(init?.body).toBe(action === "list" ? undefined : "{}");
+      if (action === "resend") expect(init?.headers).toMatchObject({ "idempotency-key": "stable-invite-001" });
+      expect(JSON.parse(io.out.mock.calls[0]![0])).toEqual(receipt);
+    });
+    it("preserves the caller's resend key on an explicit retry after network ambiguity", async () => {
+      const request = vi.fn<typeof fetch>().mockRejectedValueOnce(new Error("Network unavailable"))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ invitation: { id: `inv_${"3".repeat(32)}` } })));
+      const io = { out: vi.fn(), error: vi.fn() };
+      const args = ["invitations", "resend", "--workspace", workspace, "--invitation", invitation, "--request-key", "stable-invite-001"];
+      expect(await runCli(args, env, io, request)).toBe(1);
+      expect(request).toHaveBeenCalledOnce();
+      expect(await runCli(args, env, io, request)).toBe(0);
+      expect(request).toHaveBeenCalledTimes(2);
+      for (const [, init] of request.mock.calls) expect(init?.headers).toMatchObject({ "idempotency-key": "stable-invite-001" });
+    });
+    it.each([
+      ["list", "--workspace", "../foreign"],
+      ["revoke", "--workspace", workspace, "--invitation", "inv_bad"],
+      ["revoke", "--workspace", workspace, "--invitation", `${invitation}/accept`],
+      ["resend", "--workspace", workspace, "--invitation", invitation],
+      ["resend", "--workspace", workspace, "--invitation", invitation, "--request-key", "x".repeat(129)],
+      ["resend", "--workspace", workspace, "--invitation", invitation, "--request-key", "line\nbreak"],
+      ["revoke", "--workspace", workspace, "--invitation", invitation, "--role", "owner"],
+    ])("rejects malformed lifecycle arguments before network: %j", async (...args) => {
+      const request = vi.fn();
+      expect(await runCli(["invitations", ...args], env, { out: vi.fn(), error: vi.fn() }, request)).toBe(1);
+      expect(request).not.toHaveBeenCalled();
+    });
+    it.each([401, 403, 404, 409, 410, 503])("does not claim success or retry HTTP %s", async (status) => {
+      const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ detail: "Private invitation details" }), { status }));
+      const io = { out: vi.fn(), error: vi.fn() };
+      expect(await runCli(["invitations", "revoke", "--workspace", workspace, "--invitation", invitation], env, io, request)).toBe(1);
+      expect(request).toHaveBeenCalledOnce();
+      expect(io.out).not.toHaveBeenCalled();
+      expect(io.error.mock.calls[0]![0]).not.toContain("Private");
+    });
+    it("requires credentials and keeps recipient acceptance out of the CLI", async () => {
+      const request = vi.fn();
+      const io = { out: vi.fn(), error: vi.fn() };
+      expect(await runCli(["invitations", "list", "--workspace", workspace], {}, io, request, undefined, undefined, emptyProfileCredentialStore(), undefined, emptyAgentCredentialStore())).toBe(1);
+      expect(await runCli(["invitations", "accept", "--invitation", invitation], env, io, request)).toBe(1);
+      expect(request).not.toHaveBeenCalled();
+      expect(await runCli(["invitations", "--help"], {}, io, request)).toBe(0);
+      expect(io.out.mock.calls[0]![0]).toContain("Recipients accept in the authenticated browser");
+    });
+  });
   it.each([1, 2, 3, 4, 5])("reads RunContext v%i without changing the server verdict", async context_schema_version => {
     const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ run: { ...runObject("READY"), context_schema_version } })));
     const io = { out: vi.fn(), error: vi.fn() };
