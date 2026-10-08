@@ -6,6 +6,7 @@ keeps recognized gaps visible as `[request capability]`.
 | Surface | Available now | [request capability] |
 | --- | --- | --- |
 | Identity | WorkOS agent registration, status, logout | Agent skill auto-install |
+| Invitations | Owner create/list/revoke/resend (lifecycle release DOGFOOD-PENDING) | Recipient acceptance stays in the authenticated browser |
 | Projects | Workspace-scoped list/create, star/unstar | Get/update/delete, environments, credentials, files |
 | Tests | List/get/create/update/archive/delete, authored steps, remote run | Enable/disable shortcuts, local/group/environment/mobile variants |
 | Runs | List/create/get/start/watch/wait/cancel | Cross-Project aggregate queries |
