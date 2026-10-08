@@ -27,6 +27,80 @@ function emptyAgentCredentialStore(overrides: Partial<AgentCredentialStore> = {}
 }
 
 describe("QA.army public CLI contract", () => {
+  describe("owner invitation lifecycle", () => {
+    const workspace = `wsp_${"1".repeat(32)}`;
+    const invitation = `inv_${"2".repeat(32)}`;
+    const env = { QA_ARMY_ACCESS_TOKEN: "owner-token" };
+    it.each(["list", "revoke", "resend"])("maps invitations %s to canonical Workspace REST", async (action) => {
+      const receipt = action === "list" ? { invitations: [] } : { invitation: { id: action === "resend" ? `inv_${"3".repeat(32)}` : invitation, status: action === "revoke" ? "revoked" : "pending" } };
+      const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(receipt)));
+      const io = { out: vi.fn(), error: vi.fn() };
+      const args = ["invitations", action, "--workspace", workspace, ...(action === "list" ? [] : ["--invitation", invitation]), ...(action === "resend" ? ["--request-key", "stable-invite-001"] : [])];
+      expect(await runCli(args, env, io, request)).toBe(0);
+      expect(request).toHaveBeenCalledOnce();
+      const [url, init] = request.mock.calls[0]!;
+      expect(url).toBe(`https://api.qa.army/v1/workspaces/${workspace}/invitations${action === "list" ? "" : `/${invitation}/${action}`}`);
+      expect(init?.method).toBe(action === "list" ? "GET" : "POST");
+      expect(init?.headers).toMatchObject({ authorization: "Bearer owner-token" });
+      expect(init?.body).toBe(action === "list" ? undefined : "{}");
+      if (action === "resend") expect(init?.headers).toMatchObject({ "idempotency-key": "stable-invite-001" });
+      expect(JSON.parse(io.out.mock.calls[0]![0])).toEqual(receipt);
+    });
+    it("preserves the caller's resend key on an explicit retry after network ambiguity", async () => {
+      const request = vi.fn<typeof fetch>().mockRejectedValueOnce(new Error("Network unavailable"))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ invitation: { id: `inv_${"3".repeat(32)}` } })));
+      const io = { out: vi.fn(), error: vi.fn() };
+      const args = ["invitations", "resend", "--workspace", workspace, "--invitation", invitation, "--request-key", "stable-invite-001"];
+      expect(await runCli(args, env, io, request)).toBe(1);
+      expect(request).toHaveBeenCalledOnce();
+      expect(await runCli(args, env, io, request)).toBe(0);
+      expect(request).toHaveBeenCalledTimes(2);
+      for (const [, init] of request.mock.calls) expect(init?.headers).toMatchObject({ "idempotency-key": "stable-invite-001" });
+    });
+    it.each([
+      ["list", "--workspace", "../foreign"],
+      ["revoke", "--workspace", workspace, "--invitation", "inv_bad"],
+      ["revoke", "--workspace", workspace, "--invitation", `${invitation}/accept`],
+      ["resend", "--workspace", workspace, "--invitation", invitation],
+      ["resend", "--workspace", workspace, "--invitation", invitation, "--request-key", "x".repeat(129)],
+      ["resend", "--workspace", workspace, "--invitation", invitation, "--request-key", "line\nbreak"],
+      ["revoke", "--workspace", workspace, "--invitation", invitation, "--role", "owner"],
+    ])("rejects malformed lifecycle arguments before network: %j", async (...args) => {
+      const request = vi.fn();
+      expect(await runCli(["invitations", ...args], env, { out: vi.fn(), error: vi.fn() }, request)).toBe(1);
+      expect(request).not.toHaveBeenCalled();
+    });
+    it.each([401, 403, 404, 409, 410, 503])("does not claim success or retry HTTP %s", async (status) => {
+      const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ detail: "Private invitation details" }), { status }));
+      const io = { out: vi.fn(), error: vi.fn() };
+      expect(await runCli(["invitations", "revoke", "--workspace", workspace, "--invitation", invitation], env, io, request)).toBe(1);
+      expect(request).toHaveBeenCalledOnce();
+      expect(io.out).not.toHaveBeenCalled();
+      expect(io.error.mock.calls[0]![0]).not.toContain("Private");
+    });
+    it("requires credentials and keeps recipient acceptance out of the CLI", async () => {
+      const request = vi.fn();
+      const io = { out: vi.fn(), error: vi.fn() };
+      expect(await runCli(["invitations", "list", "--workspace", workspace], {}, io, request, undefined, undefined, emptyProfileCredentialStore(), undefined, emptyAgentCredentialStore())).toBe(1);
+      expect(await runCli(["invitations", "accept", "--invitation", invitation], env, io, request)).toBe(1);
+      expect(request).not.toHaveBeenCalled();
+      expect(await runCli(["invitations", "--help"], {}, io, request)).toBe(0);
+      expect(io.out.mock.calls[0]![0]).toContain("Recipients accept in the authenticated browser");
+    });
+  });
+  it("requests owner review without provider consent or automatic approval", async () => {
+    const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({request: {status: "pending_owner"}})));
+    const io = {out: vi.fn(), error: vi.fn()};
+    const project = `prj_${"a".repeat(32)}`, id = `icr_${"b".repeat(32)}`;
+    expect(await runCli(["connections", "request", "--project", project, "--request-key", "stable-request"], {QA_ARMY_ACCESS_TOKEN: "fixture"}, io, request)).toBe(0);
+    expect(request.mock.calls[0]?.[0]).toBe(`https://api.qa.army/v1/projects/${project}/integration-connect-requests`);
+    expect(request.mock.calls[0]?.[1]).toMatchObject({method: "POST", headers: {"idempotency-key": "stable-request"}});
+    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body))).toEqual({provider: "github"});
+    expect(await runCli(["connections", "status", "--request", id], {QA_ARMY_ACCESS_TOKEN: "fixture"}, io, request)).toBe(0);
+    expect(await runCli(["connections", "approve", "--request", id], {QA_ARMY_ACCESS_TOKEN: "fixture"}, io, request)).toBe(1);
+    expect(await runCli(["connections", "request", "--project", project, "--request-key", "stable-request", "--token", "injected"], {QA_ARMY_ACCESS_TOKEN: "fixture"}, io, request)).toBe(1);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
   it.each([1, 2, 3, 4, 5])("reads RunContext v%i without changing the server verdict", async context_schema_version => {
     const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ run: { ...runObject("READY"), context_schema_version } })));
     const io = { out: vi.fn(), error: vi.fn() };
@@ -734,3 +808,73 @@ function runObject(status: string) {
     cancellation_requested_at: null, completed_at: null, outcome_summary: null,
   };
 }
+
+it("uses stage native credentials only for stage API calls and logout", async () => {
+  const profile = { ...emptyProfileCredentialStore(), location: { service: "qa.army.cli" as const, account: "profile-api-key-staging" as const } };
+  const agent = { ...emptyAgentCredentialStore(), location: { service: "qa.army.cli" as const, account: "agent-identity-staging" as const }, get: vi.fn().mockResolvedValue({
+    registrationId: `agent_reg_${"R".repeat(26)}`, assertion: "stage.assertion.signature", assertionExpiresAt: "2099-01-01T00:00:00.000Z", refreshToken: `refresh_${"r".repeat(32)}`, refreshExpiresAt: "2099-02-01T00:00:00.000Z",
+  }) };
+  const protocol = { environment: "staging", exchangeAssertion: vi.fn().mockResolvedValue({ accessToken: "stage.access.signature", expiresIn: 300 }) } as unknown as AgentRegistrationProtocol;
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ user: { id: `usr_${"1".repeat(32)}` } }), { status: 200 }));
+  const io = { out: vi.fn(), error: vi.fn() };
+  const env = { QA_ARMY_API_URL: "https://staging.qa.army" };
+  expect(await runCli(["workspaces", "list"], env, io, request, undefined, undefined, profile, undefined, agent, protocol)).toBe(0);
+  expect(request.mock.calls[0]?.[0]).toBe("https://staging.qa.army/v1/workspaces");
+  expect(request.mock.calls[0]?.[1]).toMatchObject({ redirect: "error", headers: { authorization: "Bearer stage.access.signature" } });
+  expect(await runCli(["auth", "logout"], env, io, request, undefined, undefined, profile, undefined, agent, protocol)).toBe(0);
+  expect(profile.delete).toHaveBeenCalledOnce();
+  expect(agent.delete).toHaveBeenCalledOnce();
+});
+
+it("cannot read or delete production stores when staging was selected", async () => {
+  for (const command of [["auth", "status"], ["auth", "logout"], ["workspaces", "list"]]) {
+    const profile = emptyProfileCredentialStore();
+    const agent = emptyAgentCredentialStore();
+    const request = vi.fn<typeof fetch>();
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(command, { QA_ARMY_API_URL: "https://staging.qa.army" }, io, request, undefined, undefined, profile, undefined, agent)).toBe(1);
+    expect(profile.get).not.toHaveBeenCalled();
+    expect(profile.delete).not.toHaveBeenCalled();
+    expect(agent.get).not.toHaveBeenCalled();
+    expect(agent.delete).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  }
+});
+
+
+describe("composed client environment boundaries", () => {
+  it.each([
+    ["setup", "prepare", "--app-url", "https://fixture.example", "--project-name", "Fixture"],
+    ["setup", "status", "--app-url", "https://fixture.example"],
+    ["setup", "--mode", "instant", "--app-url", "https://fixture.example", "--project-name", "Fixture", "--input", "{}"],
+  ])("rejects staging instant setup before reading recovery credentials: %j", async (...command) => {
+    const store = { get: vi.fn(), set: vi.fn(), getOrCreate: vi.fn() };
+    const request = vi.fn<typeof fetch>();
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(command, { QA_ARMY_API_URL: "https://staging.qa.army" }, io, request,
+      undefined, undefined, undefined, undefined, undefined, undefined, store)).toBe(1);
+    expect(io.error).toHaveBeenCalledWith(expect.stringContaining("Setup credentials may only be sent to https://api.qa.army"));
+    expect(store.get).not.toHaveBeenCalled();
+    expect(store.set).not.toHaveBeenCalled();
+    expect(store.getOrCreate).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { command: ["invitations", "list", "--workspace", `wsp_${"1".repeat(32)}`], path: `/v1/workspaces/wsp_${"1".repeat(32)}/invitations` },
+    { command: ["connections", "status", "--request", `icr_${"2".repeat(32)}`], path: `/v1/integration-connect-requests/icr_${"2".repeat(32)}` },
+    { command: ["memories", "questions", "--project", `prj_${"3".repeat(32)}`], path: `/v1/projects/prj_${"3".repeat(32)}/memory/clarifications` },
+    { command: ["builds", "list", "--project", `prj_${"3".repeat(32)}`], path: `/v1/projects/prj_${"3".repeat(32)}/builds` },
+  ])("keeps retained commands on staging using its profile store: $command", async ({ command, path }) => {
+    const profile = { ...emptyProfileCredentialStore(), location: { service: "qa.army.cli" as const, account: "profile-api-key-staging" as const }, get: vi.fn().mockResolvedValue(`qa_${"a".repeat(32)}.${"b".repeat(64)}`) };
+    const agent = { ...emptyAgentCredentialStore(), location: { service: "qa.army.cli" as const, account: "agent-identity-staging" as const } };
+    const request = vi.fn<typeof fetch>(async () => Response.json({}));
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(command, { QA_ARMY_API_URL: "https://staging.qa.army" }, io, request,
+      undefined, undefined, profile, undefined, agent)).toBe(0);
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[0]).toBe(`https://staging.qa.army${path}`);
+    expect(request.mock.calls[0]?.[1]).toMatchObject({ redirect: "error", headers: { authorization: `Bearer qa_${"a".repeat(32)}.${"b".repeat(64)}` } });
+    expect(agent.get).not.toHaveBeenCalled();
+  });
+});

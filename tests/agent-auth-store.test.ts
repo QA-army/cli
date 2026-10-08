@@ -41,3 +41,11 @@ describe("native WorkOS agent credential store", () => {
     await expect(store.get()).rejects.toThrow("The native operating-system credential store is unavailable");
   });
 });
+
+it("uses a distinct staging vault account while preserving the production record name", async () => {
+  const native = entry();
+  const stage = new NativeAgentCredentialStore(async () => native, "staging");
+  const production = new NativeAgentCredentialStore(async () => entry());
+  expect(stage.location).toEqual({ service: "qa.army.cli", account: "agent-identity-staging" });
+  expect(production.location.account).toBe("agent-identity");
+});

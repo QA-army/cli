@@ -11,6 +11,22 @@ qa-army status --json
 qa-army capabilities
 ```
 
+The official staging API uses the existing claim flow with a separate issuer and native
+credential records. Select it explicitly for every staging command:
+
+```sh
+QA_ARMY_API_URL=https://staging.qa.army qa-army auth agent-register --email you@example.com
+QA_ARMY_API_URL=https://staging.qa.army qa-army auth status --json
+QA_ARMY_API_URL=https://staging.qa.army qa-army workspaces list --json
+```
+
+Staging registration fails before identity creation if its verified WorkOS issuer does
+not advertise `service_auth`. The provider must return the staging first-party claim
+URI itself; the CLI never rewrites a production claim link. Staging login/logout cannot
+read, overwrite or delete production native credentials. Other API origins require an
+explicitly injected credential. API object creation needs a valid staging identity;
+production approval or a browser session does not supply one.
+
 Author typed steps with an enabled assertion using the [Test example](examples/signup.test.json) and [test-writing skill](https://qa.army/skill.md):
 
 ```sh
@@ -21,6 +37,27 @@ qa-army setup --app-url https://example.com --project-name Example --input "$(ca
 
 ## Develop
 
+### Experimental instant setup
+
+**DOGFOOD-PENDING.** The new server capability is disabled pending email routing,
+governed signup/verification, private pre-signup reports, and release verification.
+The existing `setup` flow above remains the default; `--mode authenticated` selects
+it explicitly. No immutable download has been replaced for this experiment.
+
+The opt-in commands are `setup prepare --app-url <url> --project-name <name>`,
+`setup status --app-url <url>`, and
+`setup --mode instant --app-url <url> --project-name <name> --input <Test-JSON>`.
+Preparation never starts a Run, so authoring can proceed concurrently. Recovery
+credentials are saved in a separate native keyring entry before the first request.
+Keep the same application URL when resuming. After a lost response, read status;
+do not delete credentials, create another setup identity, or replay signup.
+
+Address conflicts and unavailable email return an explicit fallback to authenticated
+setup. That fallback provides today's capabilities; it does not promise automated
+email verification. Existing Runs must be reconciled before further mutations.
+
+### Local checks
+
 ```sh
 npm ci
 npm run validate
@@ -29,6 +66,20 @@ npm run validate
 Packaging changes also require `npm run verify:public`. Keep Linux, macOS, and Windows CI green. Read [AGENTS.md](AGENTS.md), the [capability map](docs/CAPABILITIES.md), and [surface map](docs/REPOSITORY_PARITY.md). Unsupported operations return `REQUEST_CAPABILITY`, never a fabricated success.
 
 Codex: open this repo folder as the project and select Worktree from `main`. `.codex/environments/environment.toml` provides setup, cleanup, and actions; dependency installation is explicit.
+
+## Workspace invitations
+
+Workspace owners can inspect and manage invitations through the same Product API as the app:
+
+```sh
+qa-army invitations list --workspace wsp_...
+qa-army invitations revoke --workspace wsp_... --invitation inv_...
+qa-army invitations resend --workspace wsp_... --invitation inv_... --request-key resend-invite-001
+```
+
+Resend sends a replacement invitation and invalidates the old link. Reuse the same request key after an uncertain response; do not generate a new key just to retry. These commands require an owner-authorized user session or profile API key; restricted agent setup credentials do not gain membership-management permission.
+
+Recipients inspect and accept the email link at `https://app.qa.army/invitations/<invitation_id>` after signing in with their invited email. Recipient endpoints require verified Cognito identity and explicit human acceptance, so CLI commands do not accept invitations on another person's behalf. The lifecycle API is coordinated with [platform PR #63](https://github.com/QA-army/platform/pull/63) and requires that platform release. Availability of the lifecycle operations is not yet verified.
 
 ## Product memory
 
@@ -39,6 +90,8 @@ Memory management is undergoing release validation. Use a user session or profil
 `builds list --project prj_...`, `builds reserve --project prj_... --input JSON --request-key KEY`, and `builds complete --build nbd_...` use the canonical Product API. Reserve metadata is `{ "filename": "Example.app.zip", "platform": "ios", "size": 123, "sha256": "<64 lowercase hex characters>" }`. Android uses `platform: "android"` and `.apk`; simulator `.app.tar.gz` and `.app.tgz` are also accepted. Maximum upload size is 512 MiB.
 
 Use a user session or profile API key; agent setup credentials cannot register builds. PUT the exact original file to the reservation's short-lived upload URL with its supplied headers, without your Product bearer token. Complete registration to verify its checksum and size. Keep the same request key for an ambiguous reserve retry. Registered files are immutable and do not prove native execution or a passing Run.
+
+The native execution delivery adds an optional `native_target` to saved Test JSON supplied through `tests create` or `tests update` with `--input`: `{ "build_id": "nbd_...", "profile_id": "android-pixel9pro-15" }`. The iOS profile is `ios-iphone16pro-18.2`. The build must be registered in the Test's Project and match the profile platform. Omitted selection on an update preserves the existing binding; explicit `null` clears it. Each Run freezes the selected original bytes and profile. This contract is pending the platform release; complete native Run execution remains under verification.
 
 ### Dynamic PR Tests pilot
 
@@ -76,3 +129,7 @@ Read the stable Project/UTC-day set with `qa-army memories questions --project p
 Answers are customer-declared intent and require owner review before publication, even when an owner answers. Corrections append history; stale concurrent answers return a conflict. Never infer customer intent or submit a suggested choice automatically. Published answers may be supplied to future generation; supply does not prove influence or improved results.
 
 To revisit a saved set, select its date in Memory, use CLI `memories questions --project prj_... --day YYYY-MM-DD`, or pass `day` to MCP `memories.questions`. The historical API is `GET /v1/projects/{projectId}/memory/clarifications/{day}`. Only existing sets are returned; prior answers remain correctable with revision checks.
+
+### Request owner review of GitHub connection
+
+With the owner-request API deployed, `qa-army connections request --project prj_... --request-key KEY` saves an expiring request and returns a first-party review link. `connections status --request icr_...` reads the request; `connections cancel --request icr_... --request-key KEY` cancels your pending request. A linked setup agent sees only its original credential-scoped request. Share the review link with the owner when explicitly asked; it contains no provider credential and grants no authority. The owner signs into the matching environment, approves or declines, and uses the existing GitHub connection flow. Approved request status does not mean the Project is connected or its repository is selected. No agent approval/connect command is provided. Do not reuse production credentials in staging or retry capability denials.

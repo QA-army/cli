@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { agentEnvironments, type AgentEnvironment } from "./agent-environment.js";
 import {
   QA_ARMY_CREDENTIAL_SERVICE,
   type NativeKeyringEntry,
@@ -9,7 +10,7 @@ export const QA_ARMY_AGENT_IDENTITY_ACCOUNT = "agent-identity";
 
 export interface AgentCredentialStoreLocation {
   readonly service: typeof QA_ARMY_CREDENTIAL_SERVICE;
-  readonly account: typeof QA_ARMY_AGENT_IDENTITY_ACCOUNT;
+  readonly account: (typeof agentEnvironments)[AgentEnvironment]["agentAccount"];
 }
 
 export interface AgentCredential {
@@ -28,12 +29,14 @@ export interface AgentCredentialStore {
 }
 
 export class NativeAgentCredentialStore implements AgentCredentialStore {
-  readonly location = {
-    service: QA_ARMY_CREDENTIAL_SERVICE,
-    account: QA_ARMY_AGENT_IDENTITY_ACCOUNT,
-  } as const;
+  readonly location: AgentCredentialStoreLocation;
+  private readonly entry: NativeKeyringEntryFactory;
 
-  constructor(private readonly entry: NativeKeyringEntryFactory = nativeAgentEntry) {}
+  constructor(entry?: NativeKeyringEntryFactory, environment: AgentEnvironment = "production") {
+    if (!Object.hasOwn(agentEnvironments, environment)) throw new Error("Unsupported agent environment");
+    this.location = { service: QA_ARMY_CREDENTIAL_SERVICE, account: agentEnvironments[environment].agentAccount };
+    this.entry = entry ?? (() => nativeAgentEntry(this.location.account));
+  }
 
   async get(): Promise<AgentCredential | undefined> {
     try {
@@ -86,7 +89,7 @@ function validTimestamp(value: unknown): value is string {
   return typeof value === "string" && value.length <= 64 && !Number.isNaN(Date.parse(value));
 }
 
-async function nativeAgentEntry(): Promise<NativeKeyringEntry> {
+async function nativeAgentEntry(account: AgentCredentialStoreLocation["account"]): Promise<NativeKeyringEntry> {
   const { AsyncEntry } = await import("@napi-rs/keyring");
-  return new AsyncEntry(QA_ARMY_CREDENTIAL_SERVICE, QA_ARMY_AGENT_IDENTITY_ACCOUNT);
+  return new AsyncEntry(QA_ARMY_CREDENTIAL_SERVICE, account);
 }

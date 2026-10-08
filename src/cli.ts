@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+import { agentEnvironments, agentEnvironmentForApi } from "./agent-environment.js";
+import { NativeSetupCredentialStore, SetupSessionClient, runInstantSetup, type SetupCredentialStore } from "./setup-session.js";
 import { VenkatApi, type CommandRuntime } from "./api.js";
 import { ExecutorInlineFunctionOnlyTransport, parseRunWebCommand, type RunWebTransport } from "./web-run-client.js";
 import {
@@ -11,6 +13,7 @@ import { NativeAgentCredentialStore, type AgentCredentialStore } from "./agent-a
 import { WorkosAgentAccessTokenProvider } from "./agent-access-token.js";
 import { WorkosAgentRegistrationClient, type AgentRegistrationProtocol } from "./workos-agent-registration.js";
 import { setupProject } from "./setup.js";
+import { memoryClarificationAnswer } from "./memory-clarification-answer.js";
 
 export const QA_ARMY_CLI_VERSION = "0.2.8";
 export const QA_ARMY_API_ORIGIN = "https://api.qa.army";
@@ -20,12 +23,13 @@ const runWorkspace = "/workspace";
 const capabilityRequestBase = "https://github.com/QA-army/cli/issues/new";
 
 const supportedCommands = [
+  "connections request", "connections status", "connections cancel",
   "prs list", "prs get", "prs cancel", "prs rerun", "prs promote", "prs settings", "prs configure", "prs usage",
   "auth agent-register", "auth status", "auth logout", "status", "logout", "signout",
-  "setup", "create test", "workspaces list", "workspaces create", "workspaces get",
+  "setup", "setup prepare", "setup status", "create test", "workspaces list", "workspaces create", "workspaces get",
   "builds list", "builds reserve", "builds complete",
   "workspaces update", "projects list", "projects create", "projects star", "projects unstar",
-  "members list", "invitations create", "groups list", "groups get", "groups create",
+  "members list", "invitations create", "invitations list", "invitations revoke", "invitations resend", "groups list", "groups get", "groups create",
   "groups update", "tests list", "tests get", "tests create", "tests update", "tests archive",
   "tests delete", "tests run", "runs list", "runs create", "runs get", "runs start",
   "runs watch", "runs wait", "runs cancel", "api-keys list", "api-keys create",
@@ -49,13 +53,14 @@ const requestedCommands = [
 ] as const;
 
 const apiActions: Readonly<Record<string, readonly string[]>> = {
+  connections: ["request", "status", "cancel"],
   prs: ["list", "get", "cancel", "rerun", "promote", "settings", "configure", "usage"],
   builds: ["list", "reserve", "complete"],
   memories: ["questions", "answer", "list", "create", "update", "approve", "reject", "archive", "delete", "clear", "settings", "graph", "summary", "import", "history"],
   workspaces: ["list", "create", "get", "update"],
   projects: ["list", "create", "star", "unstar"],
   members: ["list"],
-  invitations: ["create"],
+  invitations: ["create", "list", "revoke", "resend"],
   groups: ["list", "get", "create", "update"],
   tests: ["list", "get", "create", "update", "archive", "delete", "run"],
   runs: ["list", "create", "get", "start", "watch", "wait", "cancel"],
@@ -73,10 +78,11 @@ export async function runCli(
   request: typeof fetch = fetch,
   runWeb: RunWebTransport = new ExecutorInlineFunctionOnlyTransport(),
   commandRuntime?: CommandRuntime,
-  credentialStore: ApiKeyCredentialStore = new NativeApiKeyCredentialStore(),
+  credentialStore?: ApiKeyCredentialStore,
   agentAuth?: AgentAuthCommand,
-  agentCredentialStore: AgentCredentialStore = new NativeAgentCredentialStore(),
-  agentProtocol: AgentRegistrationProtocol = new WorkosAgentRegistrationClient(request),
+  agentCredentialStore?: AgentCredentialStore,
+  agentProtocol?: AgentRegistrationProtocol,
+  setupStore?: SetupCredentialStore,
 ): Promise<number> {
   try {
     if (args.includes("--api-key")) {
@@ -131,6 +137,18 @@ export async function runCli(
       io.out(JSON.stringify(result ?? null, null, 2));
       return 0;
     }
+    const selectedApi = apiUrl(environment);
+    const selectedEnvironment = selectedApi === agentEnvironments.staging.apiOrigin ? "staging" : "production";
+    credentialStore ??= new NativeApiKeyCredentialStore(undefined, selectedEnvironment);
+    agentCredentialStore ??= new NativeAgentCredentialStore(undefined, selectedEnvironment);
+    agentProtocol ??= new WorkosAgentRegistrationClient(request, 8_000, selectedEnvironment);
+    if (command[0] === "auth" && ["status", "logout"].includes(command[1] ?? "")) {
+      agentApiOrigin(selectedApi);
+      const binding = agentEnvironments[selectedEnvironment];
+      if (credentialStore.location.account !== binding.profileAccount || agentCredentialStore.location.account !== binding.agentAccount) {
+        throw new Error("Native credential stores must match the Product API environment");
+      }
+    }
     if (command[0] === "auth" && command.length === 1) {
       io.out(helpText(["auth"]));
       return 0;
@@ -153,7 +171,7 @@ export async function runCli(
       const options = readFlags(command.slice(2));
       onlyFlags(options, ["--email"]);
       const productApiBaseUrl = agentApiOrigin(apiUrl(environment));
-      const authCommand = agentAuth ?? new WorkosAgentAuthCommand(undefined, undefined, undefined, undefined, request);
+      const authCommand = agentAuth ?? new WorkosAgentAuthCommand(agentProtocol, agentCredentialStore, undefined, undefined, request);
       const result = await authCommand.registerAndClaim({
         loginHint: required(options, "--email"),
         productApiBaseUrl,
@@ -164,9 +182,27 @@ export async function runCli(
     }
 
     const baseUrl = apiUrl(environment);
+    if (command[0] === "setup" && ["prepare", "status"].includes(command[1] ?? "")) {
+      const options = readFlags(command.slice(2));
+      onlyFlags(options, command[1] === "prepare" ? ["--app-url", "--project-name"] : ["--app-url"]);
+      const appUrl = required(options, "--app-url");
+      const client = new SetupSessionClient(baseUrl, setupStore ?? new NativeSetupCredentialStore(appUrl), request);
+      const receipt = command[1] === "prepare" ? await client.prepare(appUrl, required(options, "--project-name")) : await client.status();
+      io.out(JSON.stringify(receipt, null, 2));
+      return ["PREPARING", "READY"].includes(receipt.state) ? 0 : 1;
+    }
     if (command[0] === "setup") {
       const options = readFlags(command.slice(1));
-      onlyFlags(options, ["--app-url", "--project-name", "--input", "--workspace"]);
+      onlyFlags(options, ["--app-url", "--project-name", "--input", "--workspace", "--mode"]);
+      const mode = options.get("--mode") ?? "authenticated";
+      if (!["authenticated", "instant"].includes(mode)) throw new Error("Setup mode must be authenticated or instant");
+      if (mode === "instant") {
+        if (options.has("--workspace")) throw new Error("Instant setup cannot select an existing Workspace; use authenticated setup");
+        const appUrl = required(options, "--app-url");
+        return await runInstantSetup(new SetupSessionClient(baseUrl, setupStore ?? new NativeSetupCredentialStore(appUrl), request), {
+          appUrl, projectName: required(options, "--project-name"), test: jsonObject(required(options, "--input")),
+        }, receipt => io.out(JSON.stringify(receipt, null, 2)), request, commandRuntime);
+      }
       const credential = await claimedAgentCredential(environment, baseUrl, agentCredentialStore, agentProtocol);
       const receipt = await setupProject(new VenkatApi(baseUrl, credential, request, commandRuntime), {
         appUrl: required(options, "--app-url"),
@@ -264,7 +300,8 @@ async function claimedAgentCredential(
 ): Promise<string | WorkosAgentAccessTokenProvider> {
   const injected = accessToken(environment);
   if (injected) return injected;
-  agentApiOrigin(baseUrl);
+  const binding = agentEnvironments[agentEnvironmentForApi(baseUrl)];
+  if (store.location.account !== binding.agentAccount) throw new Error("Agent credential store must match the Product API environment");
   const credential = await store.get();
   if (!credential) throw new Error("No claimed QA.army agent identity is available; run qa-army auth agent-register first");
   return new WorkosAgentAccessTokenProvider(store, protocol, Date.now, credential);
@@ -318,8 +355,12 @@ async function apiCredential(
   }
   const injected = accessToken(environment);
   if (injected) return injected;
-  if (baseUrl !== QA_ARMY_API_ORIGIN) {
+  if (![QA_ARMY_API_ORIGIN, agentEnvironments.staging.apiOrigin].some(origin => origin === baseUrl)) {
     throw new Error(`Native credentials may only be sent to ${QA_ARMY_API_ORIGIN}; inject a credential explicitly for an alternate API`);
+  }
+  const binding = agentEnvironments[agentEnvironmentForApi(baseUrl)];
+  if (profileStore.location.account !== binding.profileAccount || agentStore.location.account !== binding.agentAccount) {
+    throw new Error("Native credential stores must match the Product API environment");
   }
   const stored = await profileStore.get();
   if (stored) return stored;
@@ -355,6 +396,17 @@ async function executeTestRun(api: VenkatApi, args: readonly string[], io: CliIo
 }
 
 async function execute(api: VenkatApi, resource: string, action: string, flags: ReadonlyMap<string, string>) {
+  if (resource === "connections") {
+    if (action === "request") {
+      onlyFlags(flags, ["--project", "--request-key"]);
+      const key = required(flags, "--request-key");
+      if (!/^[A-Za-z0-9_.:-]{8,128}$/.test(key)) throw new Error("--request-key must contain 8–128 safe characters");
+      return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/integration-connect-requests`, "POST", {provider: "github"}, undefined, key);
+    }
+    onlyFlags(flags, action === "cancel" ? ["--request", "--request-key"] : ["--request"]);
+    const path = `/v1/integration-connect-requests/${id(flags, "--request", "icr")}`;
+    return action === "status" ? api.operation(path) : api.operation(`${path}/cancel`, "POST", {}, undefined, required(flags, "--request-key"));
+  }
   const input = () => jsonObject(required(flags, "--input"));
   const version = () => positiveInteger(required(flags, "--version"), "--version");
   if(resource==='prs'){
@@ -370,7 +422,7 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
   if(resource==='memories'){
     const path=`/v1/projects/${id(flags,'--project','prj')}/memory`;
     if(action==='questions'){onlyFlags(flags,['--project','--day']);const day=flags.get('--day');if(day&&!/^\d{4}-\d{2}-\d{2}$/.test(day))throw new Error('--day must use YYYY-MM-DD');return api.operation(path+'/clarifications'+(day?'/'+day:''));}
-    if(action==='answer'){onlyFlags(flags,['--project','--input']);return api.operation(path+'/clarifications','POST',input());}
+    if(action==='answer'){onlyFlags(flags,['--project','--input']);return api.operation(path+'/clarifications','POST',memoryClarificationAnswer(input()));}
     if(['list','graph','summary'].includes(action)){onlyFlags(flags,['--project']);return api.operation(path+(action==='list'?'':`/${action}`));}
     if(action==='clear'){onlyFlags(flags,['--project']);return api.operation(path,'DELETE');}
     if(action==='history'){onlyFlags(flags,['--project']);return api.operation(path+'/history','POST',{});}
@@ -398,6 +450,16 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
     case "projects.unstar": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/star`, "DELETE");
     case "members.list": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/members`);
     case "invitations.create": onlyFlags(flags, ["--workspace", "--input"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations`, "POST", input());
+    case "invitations.list": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations`);
+    case "invitations.revoke":
+      onlyFlags(flags, ["--workspace", "--invitation"]);
+      return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations/${id(flags, "--invitation", "inv")}/revoke`, "POST", {});
+    case "invitations.resend": {
+      onlyFlags(flags, ["--workspace", "--invitation", "--request-key"]);
+      const key = required(flags, "--request-key");
+      if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(key)) throw new Error("--request-key must be 1-128 safe characters");
+      return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations/${id(flags, "--invitation", "inv")}/resend`, "POST", {}, undefined, key);
+    }
     case "groups.list": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/test-groups`);
     case "groups.create": onlyFlags(flags, ["--project", "--input"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/test-groups`, "POST", input());
     case "groups.get": onlyFlags(flags, ["--group"]); return api.operation(`/v1/test-groups/${id(flags, "--group", "tgr")}`);
@@ -503,11 +565,13 @@ function helpText(subject: readonly string[]): string {
   }
   const detail: Record<string, string> = {
     builds: "Usage: qa-army builds <list|reserve|complete> [--project prj_...] [--input JSON --request-key KEY] [--build nbd_...]",
+    connections: "Usage: qa-army connections request --project prj_... --request-key KEY | status --request icr_... | cancel --request icr_... --request-key KEY. Returns a first-party owner review link; never connects a provider or grants permissions. Owner approval happens in the authenticated browser.",
     prs: "Usage: qa-army prs <list|get|cancel|rerun|promote|settings|configure|usage> --project prj_... | --verification prv_... | --integration int_... | --workspace wsp_... [--input JSON] [--test tst_... --group tgr_...] [--request-key KEY]. Pilot only. Reruns may consume up to three new Runs; planning is included.",
     memories: "Usage: qa-army memories <questions|answer|list|create|update|approve|reject|archive|clear|settings|graph|summary|import|history> --project prj_... [--input JSON] [--memory mem_... --version N]",
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
-    setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
+    setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...] [--mode authenticated|instant]\nExperimental: qa-army setup prepare --app-url <url> --project-name <name>; qa-army setup status --app-url <url>',
     workspaces: "Usage: qa-army workspaces <list|create|get|update> [options]",
+    invitations: "Usage: qa-army invitations <create|list|revoke|resend> --workspace wsp_... [--input JSON] [--invitation inv_...] [--request-key KEY]. Owner access required. Resend requires a stable request key; reuse it after an uncertain response. Recipients accept in the authenticated browser with their invited email.",
     projects: "Usage: qa-army projects <list|create|star|unstar> [options]",
     groups: "Usage: qa-army groups <list|get|create|update> [options]",
     tests: "Usage: qa-army tests <list|get|create|update|archive|delete|run> [options]",
@@ -542,15 +606,15 @@ function required(flags: ReadonlyMap<string, string>, name: string) {
   return value;
 }
 
-function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int") {
+function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv" | "icr") {
   return validateId(required(flags, name), prefix, name);
 }
 
-function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int") {
+function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv" | "icr") {
   return encodeURIComponent(rawId(flags, name, prefix));
 }
 
-function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int", label: string) {
+function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "inv" | "icr", label: string) {
   if (!new RegExp(`^${prefix}_[a-f0-9]{32}$`).test(value)) throw new Error(`${label} is invalid`);
   return value;
 }
@@ -619,9 +683,7 @@ function apiUrl(environment: Readonly<Record<string, string | undefined>>): stri
 }
 
 function agentApiOrigin(baseUrl: string): string {
-  if (baseUrl !== QA_ARMY_API_ORIGIN) {
-    throw new Error(`Claimed agent identities may only be sent to ${QA_ARMY_API_ORIGIN}`);
-  }
+  agentEnvironmentForApi(baseUrl);
   return baseUrl;
 }
 
