@@ -808,3 +808,35 @@ function runObject(status: string) {
     cancellation_requested_at: null, completed_at: null, outcome_summary: null,
   };
 }
+
+it("uses stage native credentials only for stage API calls and logout", async () => {
+  const profile = { ...emptyProfileCredentialStore(), location: { service: "qa.army.cli" as const, account: "profile-api-key-staging" as const } };
+  const agent = { ...emptyAgentCredentialStore(), location: { service: "qa.army.cli" as const, account: "agent-identity-staging" as const }, get: vi.fn().mockResolvedValue({
+    registrationId: `agent_reg_${"R".repeat(26)}`, assertion: "stage.assertion.signature", assertionExpiresAt: "2099-01-01T00:00:00.000Z", refreshToken: `refresh_${"r".repeat(32)}`, refreshExpiresAt: "2099-02-01T00:00:00.000Z",
+  }) };
+  const protocol = { environment: "staging", exchangeAssertion: vi.fn().mockResolvedValue({ accessToken: "stage.access.signature", expiresIn: 300 }) } as unknown as AgentRegistrationProtocol;
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ user: { id: `usr_${"1".repeat(32)}` } }), { status: 200 }));
+  const io = { out: vi.fn(), error: vi.fn() };
+  const env = { QA_ARMY_API_URL: "https://staging.qa.army" };
+  expect(await runCli(["workspaces", "list"], env, io, request, undefined, undefined, profile, undefined, agent, protocol)).toBe(0);
+  expect(request.mock.calls[0]?.[0]).toBe("https://staging.qa.army/v1/workspaces");
+  expect(request.mock.calls[0]?.[1]).toMatchObject({ redirect: "error", headers: { authorization: "Bearer stage.access.signature" } });
+  expect(await runCli(["auth", "logout"], env, io, request, undefined, undefined, profile, undefined, agent, protocol)).toBe(0);
+  expect(profile.delete).toHaveBeenCalledOnce();
+  expect(agent.delete).toHaveBeenCalledOnce();
+});
+
+it("cannot read or delete production stores when staging was selected", async () => {
+  for (const command of [["auth", "status"], ["auth", "logout"], ["workspaces", "list"]]) {
+    const profile = emptyProfileCredentialStore();
+    const agent = emptyAgentCredentialStore();
+    const request = vi.fn<typeof fetch>();
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(command, { QA_ARMY_API_URL: "https://staging.qa.army" }, io, request, undefined, undefined, profile, undefined, agent)).toBe(1);
+    expect(profile.get).not.toHaveBeenCalled();
+    expect(profile.delete).not.toHaveBeenCalled();
+    expect(agent.get).not.toHaveBeenCalled();
+    expect(agent.delete).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  }
+});

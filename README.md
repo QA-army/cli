@@ -11,6 +11,22 @@ qa-army status --json
 qa-army capabilities
 ```
 
+The official staging API uses the existing claim flow with a separate issuer and native
+credential records. Select it explicitly for every staging command:
+
+```sh
+QA_ARMY_API_URL=https://staging.qa.army qa-army auth agent-register --email you@example.com
+QA_ARMY_API_URL=https://staging.qa.army qa-army auth status --json
+QA_ARMY_API_URL=https://staging.qa.army qa-army workspaces list --json
+```
+
+Staging registration fails before identity creation if its verified WorkOS issuer does
+not advertise `service_auth`. The provider must return the staging first-party claim
+URI itself; the CLI never rewrites a production claim link. Staging login/logout cannot
+read, overwrite or delete production native credentials. Other API origins require an
+explicitly injected credential. API object creation needs a valid staging identity;
+production approval or a browser session does not supply one.
+
 Author typed steps with an enabled assertion using the [Test example](examples/signup.test.json) and [test-writing skill](https://qa.army/skill.md):
 
 ```sh

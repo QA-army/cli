@@ -128,3 +128,41 @@ describe("WorkOS Agent Registration reference protocol", () => {
     await expect(client.register("person@example.com")).rejects.toMatchObject({ code: "INVALID_RESPONSE", attempts: 1 });
   });
 });
+
+
+describe("staging registration boundary", () => {
+  const issuer = "https://flourishing-network-03-staging.authkit.app";
+  const discovery = { issuer, jwks_uri: `${issuer}/oauth2/jwks`, agent_auth: {
+    identity_endpoint: `${issuer}/agent/identity`, claim_endpoint: `${issuer}/agent/identity/claim`,
+    skill: `${issuer}/agent/auth.md`, identity_types_supported: ["service_auth"],
+  } };
+  it("fails before registration when the verified staging issuer does not advertise agent auth", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(json({ issuer, jwks_uri: `${issuer}/oauth2/jwks` }));
+    await expect(new WorkosAgentRegistrationClient(request, 100, "staging").register("person@example.com"))
+      .rejects.toMatchObject({ code: "NOT_CONFIGURED" });
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[1]?.method).toBe("GET");
+  });
+  it("uses only staging endpoints and accepts only the provider-returned staging claim URI", async () => {
+    const stageRegistration = registration();
+    stageRegistration.claim.attempt.verification_uri = `https://staging.qa.army/auth/agent/claim?token=${attemptToken}`;
+    const request = vi.fn<typeof fetch>(async (url) => String(url).includes(".well-known") ? json(discovery) : json(stageRegistration));
+    const client = new WorkosAgentRegistrationClient(request, 100, "staging");
+    const registered = await client.register("person@example.com");
+    expect(registered.verificationUri).toBe(stageRegistration.claim.attempt.verification_uri);
+    expect(request.mock.calls.map(c => String(c[0]))).toEqual([`${issuer}/.well-known/oauth-authorization-server`, `${issuer}/agent/identity`]);
+    expect(request.mock.calls.every(c => c[1]?.redirect === "error")).toBe(true);
+    request.mockImplementation(async url => String(url).includes(".well-known") ? json(discovery) : json(registration()));
+    await expect(client.register("person@example.com")).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+    request.mockClear();
+    await expect(client.completeClaim({ ...registered, verificationUri: registration().claim.attempt.verification_uri }, userCode))
+      .rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(request).not.toHaveBeenCalled();
+  });
+  it("rejects provider metadata with an arbitrary endpoint before creating any identity", async () => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(json({ ...discovery, agent_auth: { ...discovery.agent_auth, identity_endpoint: "https://evil.example/identity" } }));
+    await expect(new WorkosAgentRegistrationClient(request, 100, "staging").register("person@example.com"))
+      .rejects.toMatchObject({ code: "NOT_CONFIGURED" });
+    expect(request).toHaveBeenCalledOnce();
+  });
+});

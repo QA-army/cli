@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { agentEnvironments, agentEnvironmentForApi } from "./agent-environment.js";
 import { VenkatApi, type CommandRuntime } from "./api.js";
 import { ExecutorInlineFunctionOnlyTransport, parseRunWebCommand, type RunWebTransport } from "./web-run-client.js";
 import {
@@ -76,10 +77,10 @@ export async function runCli(
   request: typeof fetch = fetch,
   runWeb: RunWebTransport = new ExecutorInlineFunctionOnlyTransport(),
   commandRuntime?: CommandRuntime,
-  credentialStore: ApiKeyCredentialStore = new NativeApiKeyCredentialStore(),
+  credentialStore?: ApiKeyCredentialStore,
   agentAuth?: AgentAuthCommand,
-  agentCredentialStore: AgentCredentialStore = new NativeAgentCredentialStore(),
-  agentProtocol: AgentRegistrationProtocol = new WorkosAgentRegistrationClient(request),
+  agentCredentialStore?: AgentCredentialStore,
+  agentProtocol?: AgentRegistrationProtocol,
 ): Promise<number> {
   try {
     if (args.includes("--api-key")) {
@@ -134,6 +135,18 @@ export async function runCli(
       io.out(JSON.stringify(result ?? null, null, 2));
       return 0;
     }
+    const selectedApi = apiUrl(environment);
+    const selectedEnvironment = selectedApi === agentEnvironments.staging.apiOrigin ? "staging" : "production";
+    credentialStore ??= new NativeApiKeyCredentialStore(undefined, selectedEnvironment);
+    agentCredentialStore ??= new NativeAgentCredentialStore(undefined, selectedEnvironment);
+    agentProtocol ??= new WorkosAgentRegistrationClient(request, 8_000, selectedEnvironment);
+    if (command[0] === "auth" && ["status", "logout"].includes(command[1] ?? "")) {
+      agentApiOrigin(selectedApi);
+      const binding = agentEnvironments[selectedEnvironment];
+      if (credentialStore.location.account !== binding.profileAccount || agentCredentialStore.location.account !== binding.agentAccount) {
+        throw new Error("Native credential stores must match the Product API environment");
+      }
+    }
     if (command[0] === "auth" && command.length === 1) {
       io.out(helpText(["auth"]));
       return 0;
@@ -156,7 +169,7 @@ export async function runCli(
       const options = readFlags(command.slice(2));
       onlyFlags(options, ["--email"]);
       const productApiBaseUrl = agentApiOrigin(apiUrl(environment));
-      const authCommand = agentAuth ?? new WorkosAgentAuthCommand(undefined, undefined, undefined, undefined, request);
+      const authCommand = agentAuth ?? new WorkosAgentAuthCommand(agentProtocol, agentCredentialStore, undefined, undefined, request);
       const result = await authCommand.registerAndClaim({
         loginHint: required(options, "--email"),
         productApiBaseUrl,
@@ -267,7 +280,8 @@ async function claimedAgentCredential(
 ): Promise<string | WorkosAgentAccessTokenProvider> {
   const injected = accessToken(environment);
   if (injected) return injected;
-  agentApiOrigin(baseUrl);
+  const binding = agentEnvironments[agentEnvironmentForApi(baseUrl)];
+  if (store.location.account !== binding.agentAccount) throw new Error("Agent credential store must match the Product API environment");
   const credential = await store.get();
   if (!credential) throw new Error("No claimed QA.army agent identity is available; run qa-army auth agent-register first");
   return new WorkosAgentAccessTokenProvider(store, protocol, Date.now, credential);
@@ -321,8 +335,12 @@ async function apiCredential(
   }
   const injected = accessToken(environment);
   if (injected) return injected;
-  if (baseUrl !== QA_ARMY_API_ORIGIN) {
+  if (![QA_ARMY_API_ORIGIN, agentEnvironments.staging.apiOrigin].some(origin => origin === baseUrl)) {
     throw new Error(`Native credentials may only be sent to ${QA_ARMY_API_ORIGIN}; inject a credential explicitly for an alternate API`);
+  }
+  const binding = agentEnvironments[agentEnvironmentForApi(baseUrl)];
+  if (profileStore.location.account !== binding.profileAccount || agentStore.location.account !== binding.agentAccount) {
+    throw new Error("Native credential stores must match the Product API environment");
   }
   const stored = await profileStore.get();
   if (stored) return stored;
@@ -645,9 +663,7 @@ function apiUrl(environment: Readonly<Record<string, string | undefined>>): stri
 }
 
 function agentApiOrigin(baseUrl: string): string {
-  if (baseUrl !== QA_ARMY_API_ORIGIN) {
-    throw new Error(`Claimed agent identities may only be sent to ${QA_ARMY_API_ORIGIN}`);
-  }
+  agentEnvironmentForApi(baseUrl);
   return baseUrl;
 }
 
