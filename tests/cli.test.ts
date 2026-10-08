@@ -840,3 +840,41 @@ it("cannot read or delete production stores when staging was selected", async ()
     expect(request).not.toHaveBeenCalled();
   }
 });
+
+
+describe("composed client environment boundaries", () => {
+  it.each([
+    ["setup", "prepare", "--app-url", "https://fixture.example", "--project-name", "Fixture"],
+    ["setup", "status", "--app-url", "https://fixture.example"],
+    ["setup", "--mode", "instant", "--app-url", "https://fixture.example", "--project-name", "Fixture", "--input", "{}"],
+  ])("rejects staging instant setup before reading recovery credentials: %j", async (...command) => {
+    const store = { get: vi.fn(), set: vi.fn(), getOrCreate: vi.fn() };
+    const request = vi.fn<typeof fetch>();
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(command, { QA_ARMY_API_URL: "https://staging.qa.army" }, io, request,
+      undefined, undefined, undefined, undefined, undefined, undefined, store)).toBe(1);
+    expect(io.error).toHaveBeenCalledWith(expect.stringContaining("Setup credentials may only be sent to https://api.qa.army"));
+    expect(store.get).not.toHaveBeenCalled();
+    expect(store.set).not.toHaveBeenCalled();
+    expect(store.getOrCreate).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { command: ["invitations", "list", "--workspace", `wsp_${"1".repeat(32)}`], path: `/v1/workspaces/wsp_${"1".repeat(32)}/invitations` },
+    { command: ["connections", "status", "--request", `icr_${"2".repeat(32)}`], path: `/v1/integration-connect-requests/icr_${"2".repeat(32)}` },
+    { command: ["memories", "questions", "--project", `prj_${"3".repeat(32)}`], path: `/v1/projects/prj_${"3".repeat(32)}/memory/clarifications` },
+    { command: ["builds", "list", "--project", `prj_${"3".repeat(32)}`], path: `/v1/projects/prj_${"3".repeat(32)}/builds` },
+  ])("keeps retained commands on staging using its profile store: $command", async ({ command, path }) => {
+    const profile = { ...emptyProfileCredentialStore(), location: { service: "qa.army.cli" as const, account: "profile-api-key-staging" as const }, get: vi.fn().mockResolvedValue(`qa_${"a".repeat(32)}.${"b".repeat(64)}`) };
+    const agent = { ...emptyAgentCredentialStore(), location: { service: "qa.army.cli" as const, account: "agent-identity-staging" as const } };
+    const request = vi.fn<typeof fetch>(async () => Response.json({}));
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(command, { QA_ARMY_API_URL: "https://staging.qa.army" }, io, request,
+      undefined, undefined, profile, undefined, agent)).toBe(0);
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[0]).toBe(`https://staging.qa.army${path}`);
+    expect(request.mock.calls[0]?.[1]).toMatchObject({ redirect: "error", headers: { authorization: `Bearer qa_${"a".repeat(32)}.${"b".repeat(64)}` } });
+    expect(agent.get).not.toHaveBeenCalled();
+  });
+});
