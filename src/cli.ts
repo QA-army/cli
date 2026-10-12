@@ -418,9 +418,13 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
       return { archived: true, test_id: decodeURIComponent(testId), version: currentVersion };
     }
     case "runs.list": {
-      onlyFlags(flags, ["--test", "--before", "--limit"]);
+      onlyFlags(flags, ["--test", "--before", "--limit", "--trigger"]);
+      const trigger = flags.has("--trigger") ? required(flags, "--trigger") : undefined;
+      if (trigger !== undefined && trigger !== "manual" && trigger !== "deploy") {
+        throw new Error("--trigger must be manual or deploy");
+      }
       const limit = flags.has("--limit") ? positiveInteger(required(flags, "--limit"), "--limit", 50) : 20;
-      return api.list(rawId(flags, "--test", "tst"), flags.get("--before"), limit);
+      return api.list(rawId(flags, "--test", "tst"), flags.get("--before"), limit, trigger);
     }
     case "runs.create": onlyFlags(flags, ["--test"]); return api.create(rawId(flags, "--test", "tst"));
     case "runs.get": onlyFlags(flags, ["--run"]); return api.get(rawId(flags, "--run", "run"));

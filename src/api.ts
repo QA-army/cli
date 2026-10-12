@@ -56,9 +56,10 @@ export class VenkatApi {
     return this.call("/v1/runs", "POST", { test_id: testId }, randomUUID()) as Promise<RunReceipt>;
   }
 
-  async list(testId: string, before?: string, limit = 20): Promise<RunListReceipt> {
+  async list(testId: string, before?: string, limit = 20, trigger?: "manual" | "deploy"): Promise<RunListReceipt> {
     const search = new URLSearchParams({ test_id: testId, limit: String(limit) });
     if (before) search.set("before", before);
+    if (trigger !== undefined) search.set("trigger", trigger);
     return this.call(`/v1/runs?${search.toString()}`, "GET") as Promise<RunListReceipt>;
   }
 
