@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { withAgentCredentialLock } from "./agent-credential-lock.js";
 import {
   QA_ARMY_CREDENTIAL_SERVICE,
   type NativeKeyringEntry,
@@ -25,6 +26,7 @@ export interface AgentCredentialStore {
   get(): Promise<AgentCredential | undefined>;
   set(credential: AgentCredential): Promise<void>;
   delete(): Promise<boolean>;
+  withCredentialLock?<T>(work: () => Promise<T>): Promise<T>;
 }
 
 export class NativeAgentCredentialStore implements AgentCredentialStore {
@@ -34,6 +36,8 @@ export class NativeAgentCredentialStore implements AgentCredentialStore {
   } as const;
 
   constructor(private readonly entry: NativeKeyringEntryFactory = nativeAgentEntry) {}
+
+  withCredentialLock<T>(work: () => Promise<T>): Promise<T> { return withAgentCredentialLock(work); }
 
   async get(): Promise<AgentCredential | undefined> {
     try {

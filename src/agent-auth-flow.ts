@@ -86,7 +86,8 @@ export class WorkosAgentAuthCommand implements AgentAuthCommand {
     // Claim completion is deliberately called exactly once. A transport failure
     // is ambiguous and requires a fresh registration instead of an automatic replay.
     const credential = await this.workos.completeClaim(registration, userCode);
-    await this.store.set(credential);
+    if (this.store.withCredentialLock) await this.store.withCredentialLock(() => this.store.set(credential));
+    else await this.store.set(credential);
     const exchanged = await this.workos.exchangeAssertion(credential.assertion);
     const qaUserId = await verifyAllowedProductCall(productApiBaseUrl, exchanged.accessToken, this.request);
     return {

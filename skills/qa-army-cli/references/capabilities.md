@@ -11,13 +11,13 @@ explains the intended mapping.
 | First setup | `setup`, `create test` |
 | Workspaces | `list`, `create`, `get`, `update` |
 | Projects | `list`, `create`, `star`, `unstar` |
-| Test Groups | `list`, `get`, `create`, `update` |
+| Test Groups | `list`, `get`, `create`, `update`, `run` (explicit selection, 0.2.10+) |
 | Tests | `list`, `get`, `create`, `update`, `archive`, `delete`, `run` |
-| Runs | `list`, `create`, `get`, `start`, `watch`, `wait`, `cancel` |
+| Runs | `list`, `create`, `get`, `start`, `watch`, `wait`, `cancel`, `evidence` (0.2.10+) |
 | Account | `api-keys list`, `api-keys create`, `api-keys revoke` |
 
 `tests run` queues one durable saved Test in QA.army cloud. `--wait` returns the
-truthful terminal outcome. Local-browser, group, environment, and uploaded-app
+truthful terminal outcome. Local-browser, environment, and uploaded-app
 variants remain unavailable.
 
 ## [request capability]

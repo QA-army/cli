@@ -5,7 +5,7 @@
 ## Start
 
 ```sh
-npm install -g https://github.com/QA-army/cli/releases/download/v0.2.8/qa-army-cli-0.2.8.tgz
+npm install -g https://github.com/QA-army/cli/releases/download/v0.2.10/qa-army-0.2.10.tgz
 qa-army auth agent-register --email you@example.com
 qa-army status --json
 qa-army capabilities
@@ -36,17 +36,17 @@ Use `qa-army runs list --test tst_... --trigger manual` for manual Run evidence 
 
 ## Product memory
 
-Memory management is undergoing release validation. Use a user session or profile API key; setup-only WorkOS credentials are restricted. Review evidence before approving proposals and keep credentials in Test Accounts. Published memory assists Test creation and individual Run actions; saved assertions still verify current behavior.
+Memory management is undergoing release validation. Use a user session or profile API key; claimed WorkOS credentials do not authorize Memory management. Review evidence before approving proposals and keep credentials in Test Accounts. Published memory assists Test creation and individual Run actions; saved assertions still verify current behavior.
 
 ## Native build registration
 
 `builds list --project prj_...`, `builds reserve --project prj_... --input JSON --request-key KEY`, and `builds complete --build nbd_...` use the canonical Product API. Reserve metadata is `{ "filename": "Example.app.zip", "platform": "ios", "size": 123, "sha256": "<64 lowercase hex characters>" }`. Android uses `platform: "android"` and `.apk`; simulator `.app.tar.gz` and `.app.tgz` are also accepted. Maximum upload size is 512 MiB.
 
-Use a user session or profile API key; agent setup credentials cannot register builds. PUT the exact original file to the reservation's short-lived upload URL with its supplied headers, without your Product bearer token. Complete registration to verify its checksum and size. Keep the same request key for an ambiguous reserve retry. Registered files are immutable and do not prove native execution or a passing Run.
+Use a user session or profile API key; claimed WorkOS credentials cannot register builds. PUT the exact original file to the reservation's short-lived upload URL with its supplied headers, without your Product bearer token. Complete registration to verify its checksum and size. Keep the same request key for an ambiguous reserve retry. Registered files are immutable and do not prove native execution or a passing Run.
 
 ### Dynamic PR Tests pilot
 
-`prs` commands target the assisted, **DOGFOOD-PENDING** pilot. They require a supported profile credential and Workspace access. Restricted agent setup credentials do not gain PR-management permissions automatically.
+`prs` commands target the assisted, **DOGFOOD-PENDING** pilot. They require a supported profile credential and Workspace access. Claimed WorkOS credentials do not gain PR-management permissions automatically.
 
 ```sh
 qa-army prs list --project prj_...
@@ -80,3 +80,62 @@ Read the stable Project/UTC-day set with `qa-army memories questions --project p
 Answers are customer-declared intent and require owner review before publication, even when an owner answers. Corrections append history; stale concurrent answers return a conflict. Never infer customer intent or submit a suggested choice automatically. Published answers may be supplied to future generation; supply does not prove influence or improved results.
 
 To revisit a saved set, select its date in Memory, use CLI `memories questions --project prj_... --day YYYY-MM-DD`, or pass `day` to MCP `memories.questions`. The historical API is `GET /v1/projects/{projectId}/memory/clarifications/{day}`. Only existing sets are returned; prior answers remain correctable with revision checks.
+
+## Test management and credentials
+
+Group and Test management use the same claimed WorkOS agent identity as setup.
+Run `qa-army auth agent-register` once; the server binds that identity to the
+claiming user's current Workspace membership. It can create/read/update Tests,
+manage Test Groups, and create/start/cancel Runs and inspect evidence. This does
+not grant Test deletion, Test Account secrets, billing, member administration or
+other owner-only operations. Never copy browser session credentials or put
+secrets in Test instructions.
+
+`qa-army status --json` reports the selected credential source without printing
+its secret. Existing governed `QA_ARMY_API_KEY`, `QA_ARMY_ACCESS_TOKEN` /
+`VENKAT_ACCESS_TOKEN` injection and native profile keys remain supported; no
+second credential is needed for the claimed agent's Test management workflow.
+
+| Operation | Command |
+| --- | --- |
+| List/create Groups | `groups list --project prj_...` / `groups create --project prj_... --input JSON` |
+| Read/update Group | `groups get --group tgr_...` / `groups update --group tgr_... --version N --input JSON` |
+| Read/update Test | `tests get --test tst_...` / `tests update --test tst_... --version N --input JSON` |
+| Run saved Test | `tests run --test tst_... --wait` |
+| Inspect result/events | `runs get --run run_...` / `runs watch --run run_...` |
+| Inspect finalized evidence | `runs evidence --run run_...` |
+
+Group create/update input is `{ "name": "Onboarding", "description": null }`.
+To move or enable/disable a Test, get its latest version, then submit its **full
+editable definition** with `group_id` or `enabled` changed. Preserve all steps,
+settings and journey metadata; do not send the entire GET envelope or a partial
+patch. The server rejects stale versions. Each Test has one Group, and `null`
+selects the Project's Default group. There is no separate membership collection. `groups run` dispatches an explicit
+selection using the canonical Run API; see the selection contract below.
+
+Evidence output contains stable metadata only. Download an artifact with
+`qa-army evidence download --evidence evd_... --output new-file.png`. The command
+creates a private file without overwriting an existing file, verifies SHA-256
+and size (up to 128 MiB), and returns a receipt without the signed URL. On failure
+the created file is emptied. It never forwards the Product bearer to storage.
+A completed Run without the required screenshots is not an accepted journey.
+
+### Explicit Group Run selection
+
+Read Group and Test metadata first, then freeze 1–20 unique enabled Tests as
+`selection: [{"test_id":"tst_...","version":3}]`. CLI accepts this object through
+`groups run --project prj_... --group tgr_... --request-key unique-batch-001 --input JSON`;
+MCP takes `groups.run({project_id, group_id, request_key, selection})`. Each Test
+is a separate canonical Run and may consume the normal Run allowance.
+
+All selected Tests are checked for the same Project/Group, enabled state and
+current version before any Run is created. Every created Run must expose the
+matching immutable Test version and context hash before any child is started.
+Older servers without that proof are blocked. A response is `DISPATCHED` or
+`INCOMPLETE`, never an aggregate Test pass. Use returned Run IDs to watch results
+and inspect evidence. A replayed child already beyond READY is reported without
+starting it again. The operation is not atomic: an interruption can leave READY
+or started children, identified in the partial receipt. Reconcile those IDs
+before retrying; keep the same selection and request key. Preparation failures
+attempt to cancel known READY children before any start; inspect cancellation
+receipts and explicitly cancel any remaining unused READY Runs. Never replace the selection with a fresh list on retry.

@@ -7,8 +7,9 @@ keeps recognized gaps visible as `[request capability]`.
 | --- | --- | --- |
 | Identity | WorkOS agent registration, status, logout | Agent skill auto-install |
 | Projects | Workspace-scoped list/create, star/unstar | Get/update/delete, environments, credentials, files |
-| Tests | List/get/create/update/archive/delete, authored steps, remote run | Enable/disable shortcuts, local/group/environment/mobile variants |
-| Runs | List/create/get/start/watch/wait/cancel | Cross-Project aggregate queries |
+| Tests | List/get/create/update/archive/delete, authored steps, remote run | Enable/disable shortcuts, local/environment/mobile variants |
+| Test Groups | List/get/create/update, explicit versioned selection run | Membership shortcuts, delete |
+| Runs | List/create/get/start/watch/wait/cancel, finalized evidence metadata | Cross-Project aggregate queries |
 | Context | — | Memories |
 | Mobile | Mobile Projects and immutable build list/reserve/complete | Native artifact selection and execution |
 | Automation | Durable cloud Run primitives | CI orchestration and dynamic PR agents |

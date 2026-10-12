@@ -10,9 +10,11 @@ import { WorkosAgentAuthCommand, type AgentAuthCommand } from "./agent-auth-flow
 import { NativeAgentCredentialStore, type AgentCredentialStore } from "./agent-auth-store.js";
 import { WorkosAgentAccessTokenProvider } from "./agent-access-token.js";
 import { WorkosAgentRegistrationClient, type AgentRegistrationProtocol } from "./workos-agent-registration.js";
+import { downloadEvidence } from "./evidence-download.js";
+import { runGroup, type GroupRunInput } from "./group-run.js";
 import { setupProject } from "./setup.js";
 
-export const QA_ARMY_CLI_VERSION = "0.2.8";
+export const QA_ARMY_CLI_VERSION = "0.2.10";
 export const QA_ARMY_API_ORIGIN = "https://api.qa.army";
 export const CAPABILITY_REQUEST_EXIT_CODE = 2;
 
@@ -26,9 +28,9 @@ const supportedCommands = [
   "builds list", "builds reserve", "builds complete",
   "workspaces update", "projects list", "projects create", "projects star", "projects unstar",
   "members list", "invitations create", "groups list", "groups get", "groups create",
-  "groups update", "tests list", "tests get", "tests create", "tests update", "tests archive",
+  "groups update", "groups run", "tests list", "tests get", "tests create", "tests update", "tests archive",
   "tests delete", "tests run", "runs list", "runs create", "runs get", "runs start",
-  "runs watch", "runs wait", "runs cancel", "api-keys list", "api-keys create",
+  "runs watch", "runs wait", "runs cancel", "runs evidence", "evidence download", "api-keys list", "api-keys create",
   "memories list", "memories create", "memories update", "memories approve", "memories reject", "memories archive", "memories delete", "memories clear", "memories settings", "memories graph", "memories summary", "memories import", "memories history",
   "api-keys revoke", "capabilities", "docs", "request capability",
 ] as const;
@@ -56,9 +58,10 @@ const apiActions: Readonly<Record<string, readonly string[]>> = {
   projects: ["list", "create", "star", "unstar"],
   members: ["list"],
   invitations: ["create"],
-  groups: ["list", "get", "create", "update"],
+  groups: ["list", "get", "create", "update", "run"],
   tests: ["list", "get", "create", "update", "archive", "delete", "run"],
-  runs: ["list", "create", "get", "start", "watch", "wait", "cancel"],
+  evidence: ["download"],
+  runs: ["list", "create", "get", "start", "watch", "wait", "cancel", "evidence"],
 };
 
 export interface CliIo {
@@ -141,7 +144,9 @@ export async function runCli(
     if (command[0] === "auth" && command[1] === "logout" && command.length === 2) {
       const [profileApiKey, agentIdentity] = await Promise.all([
         credentialStore.delete(),
-        agentCredentialStore.delete(),
+        agentCredentialStore.withCredentialLock
+          ? agentCredentialStore.withCredentialLock(() => agentCredentialStore.delete())
+          : agentCredentialStore.delete(),
       ]);
       io.out(JSON.stringify({
         removed: { profile_api_key: profileApiKey, agent_identity: agentIdentity },
@@ -226,7 +231,7 @@ export async function runCli(
     const options = readFlags(flags);
     const result = await execute(api, resource, action, options);
     io.out(JSON.stringify(result, null, 2));
-    return 0;
+    return resource === "groups" && action === "run" && (result as {status?:string}).status === "INCOMPLETE" ? 1 : 0;
   } catch (error) {
     io.error(error instanceof Error ? error.message : "QA.army CLI failed");
     return 1;
@@ -398,6 +403,11 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
     case "projects.unstar": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/star`, "DELETE");
     case "members.list": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/members`);
     case "invitations.create": onlyFlags(flags, ["--workspace", "--input"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations`, "POST", input());
+    case "groups.run": {
+      onlyFlags(flags, ["--project", "--group", "--request-key", "--input"]);
+      const body = input();
+      return runGroup(api, {project_id:rawId(flags,"--project","prj"),group_id:rawId(flags,"--group","tgr"),request_key:required(flags,"--request-key"),selection:body.selection} as GroupRunInput);
+    }
     case "groups.list": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/test-groups`);
     case "groups.create": onlyFlags(flags, ["--project", "--input"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/test-groups`, "POST", input());
     case "groups.get": onlyFlags(flags, ["--group"]); return api.operation(`/v1/test-groups/${id(flags, "--group", "tgr")}`);
@@ -427,6 +437,8 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
       return api.list(rawId(flags, "--test", "tst"), flags.get("--before"), limit, trigger);
     }
     case "runs.create": onlyFlags(flags, ["--test"]); return api.create(rawId(flags, "--test", "tst"));
+    case "evidence.download": onlyFlags(flags, ["--evidence", "--output"]); return downloadEvidence(api,rawId(flags,"--evidence","evd"),required(flags,"--output"));
+    case "runs.evidence": onlyFlags(flags, ["--run"]); return api.operation(`/v1/runs/${id(flags, "--run", "run")}/evidence`);
     case "runs.get": onlyFlags(flags, ["--run"]); return api.get(rawId(flags, "--run", "run"));
     case "runs.start": onlyFlags(flags, ["--run"]); return api.start(rawId(flags, "--run", "run"));
     case "runs.watch": onlyFlags(flags, ["--run", "--after"]); return api.watch(rawId(flags, "--run", "run"), optionalCursor(flags));
@@ -513,9 +525,10 @@ function helpText(subject: readonly string[]): string {
     setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
     workspaces: "Usage: qa-army workspaces <list|create|get|update> [options]",
     projects: "Usage: qa-army projects <list|create|star|unstar> [options]",
-    groups: "Usage: qa-army groups <list|get|create|update> [options]",
+    groups: "Usage: qa-army groups <list|get|create|update|run> [options]",
     tests: "Usage: qa-army tests <list|get|create|update|archive|delete|run> [options]",
-    runs: "Usage: qa-army runs <list|create|get|start|watch|wait|cancel> [options]",
+    runs: "Usage: qa-army runs <list|create|get|start|watch|wait|cancel|evidence> [options]",
+    evidence: "Usage: qa-army evidence download --evidence evd_... --output <new-file>",
     "api-keys": "Usage: qa-army api-keys <list|create|revoke> [options]",
     capabilities: "Usage: qa-army capabilities [--json]",
     request: 'Usage: qa-army request capability "command or feature"',
@@ -546,15 +559,15 @@ function required(flags: ReadonlyMap<string, string>, name: string) {
   return value;
 }
 
-function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int") {
+function rawId(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "evd") {
   return validateId(required(flags, name), prefix, name);
 }
 
-function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int") {
+function id(flags: ReadonlyMap<string, string>, name: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "evd") {
   return encodeURIComponent(rawId(flags, name, prefix));
 }
 
-function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int", label: string) {
+function validateId(value: string, prefix: "wsp" | "prj" | "tgr" | "tst" | "run" | "key" | "mem" | "nbd" | "prv" | "int" | "evd", label: string) {
   if (!new RegExp(`^${prefix}_[a-f0-9]{32}$`).test(value)) throw new Error(`${label} is invalid`);
   return value;
 }
