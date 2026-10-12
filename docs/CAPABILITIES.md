@@ -6,10 +6,10 @@ keeps recognized gaps visible as `[request capability]`.
 | Surface | Available now | [request capability] |
 | --- | --- | --- |
 | Identity | WorkOS agent registration, status, logout | Agent skill auto-install |
-| Projects | Workspace-scoped list/create, star/unstar | Get/update/delete, environments, credentials, files |
+| Projects | Workspace-scoped list/create | Get/update/delete, star/unstar, environments, credentials, files |
 | Tests | List/get/create/update/archive/delete, authored steps, remote run | Enable/disable shortcuts, local/group/environment/mobile variants |
 | Runs | List/create/get/start/watch/wait/cancel | Cross-Project aggregate queries |
-| Context | — | Memories |
+| Context | Memory questions/answers, list/create/update/review/archive/clear/settings/graph/summary/import/history | Individual memory deletion |
 | Mobile | Mobile Projects and immutable build list/reserve/complete | Native artifact selection and execution |
 | Automation | Durable cloud Run primitives | CI orchestration and dynamic PR agents |
 

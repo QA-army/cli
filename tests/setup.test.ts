@@ -239,9 +239,11 @@ function run(status: "READY" | "RUNNING" | "PASSED", id = ids.run) {
   return {
     id, status, workspace_id: ids.workspace, project_id: ids.project, test_group_id: null, test_id: ids.test,
     run_url: runUrl(id),
+    trigger: "manual", triggered_by: `usr_${"9".repeat(32)}`,
     context_schema_version: 2 as const, context_hash: `sha256:${"a".repeat(64)}`,
     resolved_at: "2026-09-09T13:00:00.000Z", cancellation_requested_at: null,
     completed_at: null, outcome_summary: null,
+    created_at: "2026-09-09T12:59:00.000Z", updated_at: "2026-09-09T13:00:00.000Z",
   };
 }
 

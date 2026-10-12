@@ -9,12 +9,17 @@ explains the intended mapping.
 | --- | --- |
 | Identity | `auth agent-register`, `status`, `logout`, `signout` |
 | First setup | `setup`, `create test` |
-| Workspaces | `list`, `create`, `get`, `update` |
-| Projects | `list`, `create`, `star`, `unstar` |
-| Test Groups | `list`, `get`, `create`, `update` |
-| Tests | `list`, `get`, `create`, `update`, `archive`, `delete`, `run` |
-| Runs | `list`, `create`, `get`, `start`, `watch`, `wait`, `cancel` |
+| Workspaces | `workspaces list`, `workspaces create`, `workspaces get`, `workspaces update` |
+| Projects | `projects list`, `projects create` |
+| Membership | `members list`, `invitations create` |
+| Test Groups | `groups list`, `groups get`, `groups create`, `groups update` |
+| Tests | `tests list`, `tests get`, `tests create`, `tests update`, `tests archive`, `tests delete`, `tests run` |
+| Runs | `runs list`, `runs create`, `runs get`, `runs start`, `runs watch`, `runs wait`, `runs cancel` |
+| Native builds | `builds list`, `builds reserve`, `builds complete` |
+| Product memory | `memories questions`, `memories answer`, `memories list`, `memories create`, `memories update`, `memories approve`, `memories reject`, `memories archive`, `memories clear`, `memories settings`, `memories graph`, `memories summary`, `memories import`, `memories history` |
+| Dynamic PR pilot | `prs list`, `prs get`, `prs cancel`, `prs rerun`, `prs promote`, `prs settings`, `prs configure`, `prs usage` |
 | Account | `api-keys list`, `api-keys create`, `api-keys revoke` |
+| Discovery | `capabilities`, `docs`, `request capability` |
 
 `tests run` queues one durable saved Test in QA.army cloud. `--wait` returns the
 truthful terminal outcome. Local-browser, group, environment, and uploaded-app
@@ -26,21 +31,24 @@ variants remain unavailable.
 | --- | --- |
 | Agent bootstrap | `agent init` |
 | Local browser | `run`, `tests run --local` |
-| Project lifecycle | `projects get`, `projects update`, `projects delete` |
-| Environments | `projects environments`, `environments-create`, `environments-delete` |
-| Project credentials/files | `projects credentials`, `credentials-create`, `files` |
+| Project lifecycle | `projects get`, `projects update`, `projects delete`, `projects star`, `projects unstar` |
+| Environments | `projects environments`, `projects environments-create`, `projects environments-delete` |
+| Project credentials/files | `projects credentials`, `projects credentials-create`, `projects files` |
 | Test Groups | `groups delete`, `groups add-test`, `groups remove-test` |
 | Test toggles | `tests enable`, `tests disable` |
 | Group/mobile variants | `tests run --group`, platform/app/environment flags |
 | Mobile artifacts | `upload-app` |
 | Automation | `ci`, `pr run-dynamic` |
+| Memory deletion | `memories delete` |
 
 Do not emulate these operations with unrelated endpoints. Return the stable
 capability receipt so product work can add the correct server-owned contract.
 
 ## Product memory (release validation pending)
 
-Use `qa-army memories list --project prj_...` to read scoped knowledge. `create` accepts `--input` JSON; `update`, `approve`, `reject`, and `archive` require `--memory mem_... --version N`. `settings` accepts `{ "auto_learn": true }`; `graph`, `summary`, `import`, and `history` use the same Project. `clear` archives Project memory and disables automatic updates.
+Use `qa-army memories list --project prj_...` to read scoped knowledge. `create` accepts `--input` JSON. `update` requires `--project`, `--memory`, `--version`, and `--input`; `approve`, `reject`, and `archive` require the same selectors and version without `--input`. `settings` accepts `{ "auto_learn": true }`; `graph`, `summary`, `import`, and `history` use the same Project. `clear` archives Project memory and disables automatic updates.
+
+Read the stable daily clarification set with `qa-army memories questions --project prj_... [--day YYYY-MM-DD]`. Answer with `qa-army memories answer --project prj_... --input JSON`; a skip requires both `choice: null` and `skipped: true`.
 
 Use an authenticated user session or profile API key. Setup-only WorkOS agent credentials do not authorize memory management. Treat observations as historical evidence, requirements as intended behavior, and document imports as proposals requiring review. Never store credentials. Memory usage does not establish correctness or prove improvement.
 

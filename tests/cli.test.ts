@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { runCli } from "../src/cli.js";
 import { parseRunWebCommand, type RunWebTransport } from "../src/web-run-client.js";
 import type { ApiKeyCredentialStore } from "../src/auth-store.js";
 import type { AgentAuthCommand } from "../src/agent-auth-flow.js";
 import type { AgentCredentialStore } from "../src/agent-auth-store.js";
 import type { AgentRegistrationProtocol } from "../src/workos-agent-registration.js";
+
+const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
 
 function emptyProfileCredentialStore(): ApiKeyCredentialStore {
   return {
@@ -64,9 +67,9 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["--version"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["projects"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["api-keys"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
-    expect(output[0]).toContain("QA.army CLI 0.2.8");
+    expect(output[0]).toContain(`QA.army CLI ${manifest.version}`);
     expect(output[0]).toContain("https://api.qa.army/v1");
-    expect(output[1]).toBe("0.2.8");
+    expect(output[1]).toBe(manifest.version);
     expect(output[2]).toContain("qa-army projects");
     expect(output[3]).toContain("qa-army api-keys");
     expect(profileStore.get).not.toHaveBeenCalled();
@@ -111,14 +114,55 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["capabilities", "--json"], {}, { out: (value) => output.push(value), error: vi.fn() })).toBe(0);
     const inventory = JSON.parse(output[0]!);
     expect(inventory).toMatchObject({
-      cli_version: "0.2.8",
+      cli_version: manifest.version,
       status: "AVAILABLE",
       api_base_url: "https://api.qa.army/v1",
       openapi_url: "https://api.qa.army/v1/openapi.json",
     });
     expect(inventory.supported).toContain("tests run");
+    expect(inventory.supported).toContain("memories questions");
+    expect(inventory.supported).toContain("memories answer");
+    expect(inventory.supported).not.toContain("memories delete");
+    expect(inventory.supported).not.toContain("projects star");
+    expect(inventory.request_capability).toEqual(expect.arrayContaining([
+      "memories delete", "projects star", "projects unstar",
+    ]));
     expect(inventory.request_capability).toContain("upload-app");
   });
+
+  it("keeps memory help and capabilities on the same supported actions", async () => {
+    const output: string[] = [];
+    const io = { out: (value: string) => output.push(value), error: vi.fn() };
+    expect(await runCli(["capabilities"], {}, io)).toBe(0);
+    expect(await runCli(["memories", "--help"], {}, io)).toBe(0);
+    const inventory = JSON.parse(output[0]!);
+    const supportedActions = inventory.supported
+      .filter((command: string) => command.startsWith("memories "))
+      .map((command: string) => command.slice("memories ".length));
+    const helpActions = output[1]!.match(/<([^>]+)>/)?.[1]?.split("|");
+    expect(helpActions).toEqual(supportedActions);
+  });
+
+  it.each([["memories", "delete"], ["projects", "star"], ["projects", "unstar"]])(
+    "returns REQUEST_CAPABILITY for %s %s without reading credentials",
+    async (resource, action) => {
+      const request = vi.fn<typeof fetch>();
+      const profileStore = emptyProfileCredentialStore();
+      const output: string[] = [];
+      expect(await runCli(
+        [resource, action, "--project", `prj_${"1".repeat(32)}`],
+        {},
+        { out: (value) => output.push(value), error: vi.fn() },
+        request, undefined, undefined, profileStore,
+      )).toBe(2);
+      expect(JSON.parse(output[0]!)).toMatchObject({
+        status: "REQUEST_CAPABILITY",
+        capability: `${resource} ${action}`,
+      });
+      expect(request).not.toHaveBeenCalled();
+      expect(profileStore.get).not.toHaveBeenCalled();
+    },
+  );
 
   it("reserves native builds with an explicit stable request key", async () => {
     const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ build: { id: "registered" } }), { status: 201 }));
@@ -221,46 +265,43 @@ describe("QA.army public CLI contract", () => {
     expect(JSON.parse(output[1]!).status).toBe("PASSED");
   });
 
-  it.each(["manual", "deploy"])("filters Run history by %s and preserves pagination", async (trigger) => {
+  it("preserves canonical Run provenance and timestamps in list receipts", async () => {
     const testId = `tst_${"4".repeat(32)}`;
-    const page = { runs: [{ ...runObject("PASSED"), trigger }], next_before: "opaque-next" };
+    const page = { runs: [runObject("PASSED")], next_before: "opaque-next" };
     const request = vi.fn<typeof fetch>(async () => json(page));
     const output: string[] = [];
-    const io = { out: (value: string) => output.push(value), error: vi.fn() };
-    expect(await runCli(["runs", "list", "--test", testId, "--trigger", trigger,
-      "--before", "opaque+/=", "--limit", "1"], { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(0);
-    const url = new URL(String(request.mock.calls[0]?.[0]));
-    expect(Object.fromEntries(url.searchParams)).toEqual({ test_id: testId, limit: "1", before: "opaque+/=", trigger });
-    expect(JSON.parse(output[0]!)).toMatchObject({ runs: [{ status: "PASSED" }], next_before: "opaque-next" });
+    expect(await runCli(["runs", "list", "--test", testId, "--before", "opaque-next", "--limit", "1"],
+      { QA_ARMY_ACCESS_TOKEN: "token" }, { out: (value) => output.push(value), error: vi.fn() }, request)).toBe(0);
+    expect(Object.fromEntries(new URL(String(request.mock.calls[0]?.[0])).searchParams)).toEqual({
+      test_id: testId, limit: "1", before: "opaque-next",
+    });
+    expect(JSON.parse(output[0]!)).toMatchObject({ runs: [{
+      trigger: "manual",
+      triggered_by: `usr_${"5".repeat(32)}`,
+      created_at: "2026-08-19T11:59:00.000Z",
+      updated_at: "2026-08-19T12:00:00.000Z",
+    }], next_before: "opaque-next" });
   });
 
-  it.each(["pr", "scheduled", "MANUAL", "", "manual&trigger=deploy"])("rejects unsupported Run trigger %j before REST", async (trigger) => {
+  it("rejects the non-canonical Run trigger filter before REST", async () => {
     const request = vi.fn<typeof fetch>();
     const io = { out: vi.fn(), error: vi.fn() };
-    expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--trigger", trigger],
+    expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--trigger", "manual"],
       { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(1);
     expect(request).not.toHaveBeenCalled();
   });
 
-  it.each(["deploy", "unknown", null, undefined])("rejects filtered evidence with returned trigger %s", async (returnedTrigger) => {
-    const request = vi.fn<typeof fetch>(async () => json({ runs: [
-      { ...runObject("PASSED"), trigger: "manual" },
-      { ...runObject("PASSED"), trigger: returnedTrigger },
-    ], next_before: null }));
+  it.each(["trigger", "triggered_by", "created_at", "updated_at"])(
+    "rejects Run receipts missing canonical %s",
+    async (field) => {
+    const incomplete = { ...runObject("PASSED") } as Record<string, unknown>;
+    delete incomplete[field];
+    const request = vi.fn<typeof fetch>(async () => json({ runs: [incomplete], next_before: null }));
     const io = { out: vi.fn(), error: vi.fn() };
-    expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--trigger", "manual"],
+    expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`],
       { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(1);
     expect(io.out).not.toHaveBeenCalled();
-    expect(io.error).toHaveBeenCalledWith(expect.stringContaining("does not match the requested trigger"));
-  });
-
-  it("keeps forbidden filtered Run history as an error", async () => {
-    const request = vi.fn<typeof fetch>(async () => new Response("{}", { status: 403 }));
-    const io = { out: vi.fn(), error: vi.fn() };
-    expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--trigger", "manual"],
-      { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(1);
-    expect(io.out).not.toHaveBeenCalled();
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(io.error).toHaveBeenCalledWith("QA.army returned an invalid Run receipt");
   });
 
   it("creates, starts, and waits for a saved Test Run", async () => {
@@ -772,8 +813,10 @@ function runObject(status: string) {
     id: `run_${"1".repeat(32)}`, status, workspace_id: `wsp_${"2".repeat(32)}`,
     project_id: `prj_${"3".repeat(32)}`, test_group_id: null, test_id: `tst_${"4".repeat(32)}`,
     run_url: `https://app.qa.army/dashboard/first/projects/prj_${"3".repeat(32)}/tests/tst_${"4".repeat(32)}/runs/run_${"1".repeat(32)}`,
+    trigger: "manual", triggered_by: `usr_${"5".repeat(32)}`,
     context_schema_version: 2, context_hash: `sha256:${"a".repeat(64)}`,
     resolved_at: "2026-08-19T12:00:00.000Z",
     cancellation_requested_at: null, completed_at: null, outcome_summary: null,
+    created_at: "2026-08-19T11:59:00.000Z", updated_at: "2026-08-19T12:00:00.000Z",
   };
 }

@@ -7,6 +7,8 @@ export interface RunReceipt {
   readonly test_group_id: string | null;
   readonly test_id: string;
   readonly run_url: string;
+  readonly trigger: string;
+  readonly triggered_by: string | null;
   readonly context_schema_version: 1 | 2 | 3 | 4 | 5;
   readonly journey?: Readonly<Record<string, unknown>>;
   readonly context_hash: string;
@@ -14,6 +16,8 @@ export interface RunReceipt {
   readonly cancellation_requested_at: string | null;
   readonly completed_at: string | null;
   readonly outcome_summary: string | null;
+  readonly created_at: string;
+  readonly updated_at: string;
 }
 
 export type RunStatus = "READY" | "QUEUED" | "PROVISIONING" | "RUNNING" | "PASSED" | "FAILED" | "ERROR" | "CANCELLED";
@@ -56,10 +60,9 @@ export class VenkatApi {
     return this.call("/v1/runs", "POST", { test_id: testId }, randomUUID()) as Promise<RunReceipt>;
   }
 
-  async list(testId: string, before?: string, limit = 20, trigger?: "manual" | "deploy"): Promise<RunListReceipt> {
+  async list(testId: string, before?: string, limit = 20): Promise<RunListReceipt> {
     const search = new URLSearchParams({ test_id: testId, limit: String(limit) });
     if (before) search.set("before", before);
-    if (trigger !== undefined) search.set("trigger", trigger);
     return this.call(`/v1/runs?${search.toString()}`, "GET") as Promise<RunListReceipt>;
   }
 
@@ -131,7 +134,7 @@ export class VenkatApi {
     if (response.status === 204) return undefined;
     const payload = await response.json() as unknown;
     return path.startsWith("/v1/runs?")
-      ? parseRunList(payload, new URL(url).searchParams.get("trigger"))
+      ? parseRunList(payload)
       : path.includes("/events?")
       ? parseWatch(payload)
       : path === "/v1/runs" || path.startsWith("/v1/runs/")
@@ -178,11 +181,13 @@ function parseRun(value: unknown): RunReceipt {
     id: string(run.id), status: run.status, workspace_id: string(run.workspace_id),
     project_id: string(run.project_id), test_group_id: run.test_group_id === null ? null : string(run.test_group_id),
     test_id: string(run.test_id), run_url: runUrl(run.run_url, run),
+    trigger: string(run.trigger), triggered_by: nullableString(run.triggered_by),
     context_schema_version: run.context_schema_version, context_hash: hash,
     ...(run.journey ? {journey:record(run.journey)} : {}),
-    resolved_at: string(run.resolved_at),
-    cancellation_requested_at: nullableString(run.cancellation_requested_at),
-    completed_at: nullableString(run.completed_at), outcome_summary: nullableString(run.outcome_summary),
+    resolved_at: timestamp(run.resolved_at),
+    cancellation_requested_at: nullableTimestamp(run.cancellation_requested_at),
+    completed_at: nullableTimestamp(run.completed_at), outcome_summary: nullableString(run.outcome_summary),
+    created_at: timestamp(run.created_at), updated_at: timestamp(run.updated_at),
   };
 }
 function runUrl(value: unknown, run: Readonly<Record<string, unknown>>): string {
@@ -205,19 +210,17 @@ function parseWatch(value: unknown): RunWatchBatch {
     next_after: number(payload.next_after), terminal: payload.terminal,
   };
 }
-function parseRunList(value: unknown, trigger: string | null): RunListReceipt {
+function parseRunList(value: unknown): RunListReceipt {
   const payload = record(value);
   if (!Array.isArray(payload.runs)) invalid();
-  if (trigger !== null && payload.runs.some((run) => record(run).trigger !== trigger)) {
-    throw new Error("QA.army returned Run evidence that does not match the requested trigger");
-  }
   const nextBefore = payload.next_before;
   if (nextBefore !== null && typeof nextBefore !== "string") invalid();
   return { runs: payload.runs.map(parseRun), next_before: nextBefore as string | null };
 }
 function terminalRun(status: RunStatus) { return ["PASSED", "FAILED", "ERROR", "CANCELLED"].includes(status); }
 function isStatus(value: unknown): value is RunStatus { return typeof value === "string" && ["READY", "QUEUED", "PROVISIONING", "RUNNING", "PASSED", "FAILED", "ERROR", "CANCELLED"].includes(value); }
-function nullableString(value: unknown): string | null { return value === null || value === undefined ? null : string(value); }
+function nullableString(value: unknown): string | null { return value === null ? null : string(value); }
+function nullableTimestamp(value: unknown): string | null { return value === null ? null : timestamp(value); }
 function timestamp(value: unknown): string { const text = string(value); if (Number.isNaN(Date.parse(text))) invalid(); return text; }
 function number(value: unknown): number { if (typeof value !== "number" || !Number.isInteger(value)) invalid(); return value; }
 function invalid(): never { throw new Error("QA.army returned an invalid Run receipt"); }

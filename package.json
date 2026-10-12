@@ -1,7 +1,7 @@
 {
   "name": "qa-army",
   "version": "0.2.9",
-  "description": "Agent-first CLI for QA.army plain-language Web and Mobile testing",
+  "description": "Agent-first CLI for QA.army remote Web Test runs and native build registration",
   "keywords": [
     "ai",
     "automation",
@@ -40,7 +40,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsc --project tsconfig.json",
+    "build": "node scripts/generate-version.mjs && tsc --project tsconfig.json",
     "package:cli": "npm run build && node scripts/package-cli.mjs",
     "prepublishOnly": "npm run validate",
     "test": "vitest run --dir tests",

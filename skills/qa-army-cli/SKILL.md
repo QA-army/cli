@@ -1,6 +1,6 @@
 ---
 name: qa-army-cli
-description: Use the QA.army CLI to create or reuse Projects and durable plain-language Tests, run them in QA.army cloud, and report typed terminal outcomes. Trigger for app QA setup, regression coverage, or remote Web and Mobile Test runs.
+description: Use the QA.army CLI to create or reuse Projects and durable plain-language Tests, run remote Web Tests in QA.army cloud, register native builds, and report typed terminal outcomes. Trigger for app QA setup, regression coverage, remote Web Test runs, or native build registration.
 license: MIT
 metadata:
   author: QA.army
@@ -11,6 +11,9 @@ metadata:
 
 Use `qa-army` (or the short `qa` binary) as the control plane for durable
 QA.army Projects, Tests, and cloud Runs.
+
+Native build registration records an immutable artifact; it does not provide
+native Mobile Test execution or passing Run evidence.
 
 ## Start
 

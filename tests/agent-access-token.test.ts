@@ -113,8 +113,10 @@ function runObject() {
     id: `run_${"1".repeat(32)}`, status: "READY", workspace_id: `wsp_${"2".repeat(32)}`,
     project_id: `prj_${"3".repeat(32)}`, test_group_id: null, test_id: `tst_${"4".repeat(32)}`,
     run_url: `https://app.qa.army/dashboard/first/projects/prj_${"3".repeat(32)}/tests/tst_${"4".repeat(32)}/runs/run_${"1".repeat(32)}`,
+    trigger: "manual", triggered_by: `usr_${"5".repeat(32)}`,
     context_schema_version: 2, context_hash: `sha256:${"a".repeat(64)}`,
     resolved_at: "2026-09-09T13:00:00.000Z", cancellation_requested_at: null,
     completed_at: null, outcome_summary: null,
+    created_at: "2026-09-09T12:59:00.000Z", updated_at: "2026-09-09T13:00:00.000Z",
   };
 }

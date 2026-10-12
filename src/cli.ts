@@ -11,8 +11,9 @@ import { NativeAgentCredentialStore, type AgentCredentialStore } from "./agent-a
 import { WorkosAgentAccessTokenProvider } from "./agent-access-token.js";
 import { WorkosAgentRegistrationClient, type AgentRegistrationProtocol } from "./workos-agent-registration.js";
 import { setupProject } from "./setup.js";
+import { QA_ARMY_CLI_VERSION } from "./version.js";
 
-export const QA_ARMY_CLI_VERSION = "0.2.8";
+export { QA_ARMY_CLI_VERSION } from "./version.js";
 export const QA_ARMY_API_ORIGIN = "https://api.qa.army";
 export const CAPABILITY_REQUEST_EXIT_CODE = 2;
 
@@ -24,12 +25,12 @@ const supportedCommands = [
   "auth agent-register", "auth status", "auth logout", "status", "logout", "signout",
   "setup", "create test", "workspaces list", "workspaces create", "workspaces get",
   "builds list", "builds reserve", "builds complete",
-  "workspaces update", "projects list", "projects create", "projects star", "projects unstar",
+  "workspaces update", "projects list", "projects create",
   "members list", "invitations create", "groups list", "groups get", "groups create",
   "groups update", "tests list", "tests get", "tests create", "tests update", "tests archive",
   "tests delete", "tests run", "runs list", "runs create", "runs get", "runs start",
   "runs watch", "runs wait", "runs cancel", "api-keys list", "api-keys create",
-  "memories list", "memories create", "memories update", "memories approve", "memories reject", "memories archive", "memories delete", "memories clear", "memories settings", "memories graph", "memories summary", "memories import", "memories history",
+  "memories questions", "memories answer", "memories list", "memories create", "memories update", "memories approve", "memories reject", "memories archive", "memories clear", "memories settings", "memories graph", "memories summary", "memories import", "memories history",
   "api-keys revoke", "capabilities", "docs", "request capability",
 ] as const;
 
@@ -41,19 +42,21 @@ const requestedTestRunFlags = [
 
 const requestedCommands = [
   "agent init", "run (local browser)", "projects get", "projects update", "projects delete",
+  "projects star", "projects unstar",
   "projects environments", "projects environments-create", "projects environments-delete",
   "projects credentials", "projects credentials-create", "projects files", "groups delete", "groups add-test",
   "groups remove-test", "tests enable", "tests disable",
   ...requestedTestRunFlags.map((flag) => `tests run ${flag}`),
   "upload-app", "ci", "pr run-dynamic",
+  "memories delete",
 ] as const;
 
 const apiActions: Readonly<Record<string, readonly string[]>> = {
   prs: ["list", "get", "cancel", "rerun", "promote", "settings", "configure", "usage"],
   builds: ["list", "reserve", "complete"],
-  memories: ["questions", "answer", "list", "create", "update", "approve", "reject", "archive", "delete", "clear", "settings", "graph", "summary", "import", "history"],
+  memories: ["questions", "answer", "list", "create", "update", "approve", "reject", "archive", "clear", "settings", "graph", "summary", "import", "history"],
   workspaces: ["list", "create", "get", "update"],
-  projects: ["list", "create", "star", "unstar"],
+  projects: ["list", "create"],
   members: ["list"],
   invitations: ["create"],
   groups: ["list", "get", "create", "update"],
@@ -394,8 +397,6 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
     case "workspaces.update": onlyFlags(flags, ["--workspace", "--input"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}`, "PATCH", input());
     case "projects.list": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/projects`);
     case "projects.create": onlyFlags(flags, ["--workspace", "--input"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/projects`, "POST", input());
-    case "projects.star": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/star`, "PUT");
-    case "projects.unstar": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/star`, "DELETE");
     case "members.list": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/members`);
     case "invitations.create": onlyFlags(flags, ["--workspace", "--input"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations`, "POST", input());
     case "groups.list": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/test-groups`);
@@ -418,13 +419,9 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
       return { archived: true, test_id: decodeURIComponent(testId), version: currentVersion };
     }
     case "runs.list": {
-      onlyFlags(flags, ["--test", "--before", "--limit", "--trigger"]);
-      const trigger = flags.has("--trigger") ? required(flags, "--trigger") : undefined;
-      if (trigger !== undefined && trigger !== "manual" && trigger !== "deploy") {
-        throw new Error("--trigger must be manual or deploy");
-      }
+      onlyFlags(flags, ["--test", "--before", "--limit"]);
       const limit = flags.has("--limit") ? positiveInteger(required(flags, "--limit"), "--limit", 50) : 20;
-      return api.list(rawId(flags, "--test", "tst"), flags.get("--before"), limit, trigger);
+      return api.list(rawId(flags, "--test", "tst"), flags.get("--before"), limit);
     }
     case "runs.create": onlyFlags(flags, ["--test"]); return api.create(rawId(flags, "--test", "tst"));
     case "runs.get": onlyFlags(flags, ["--run"]); return api.get(rawId(flags, "--run", "run"));
@@ -465,9 +462,10 @@ function requestedCapability(args: readonly string[]): string | undefined {
     return resource === "run" ? "run (local browser)" : [resource, action].filter(Boolean).join(" ");
   }
   const missing: Record<string, readonly string[]> = {
-    projects: ["get", "update", "delete", "environments", "environments-create", "environments-delete", "credentials", "credentials-create", "files"],
+    projects: ["get", "update", "delete", "star", "unstar", "environments", "environments-create", "environments-delete", "credentials", "credentials-create", "files"],
     groups: ["delete", "add-test", "remove-test"],
     tests: ["enable", "disable"],
+    memories: ["delete"],
   };
   if (action && missing[resource]?.includes(action)) return `${resource} ${action}`;
   return undefined;
@@ -512,7 +510,7 @@ function helpText(subject: readonly string[]): string {
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
     setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
     workspaces: "Usage: qa-army workspaces <list|create|get|update> [options]",
-    projects: "Usage: qa-army projects <list|create|star|unstar> [options]",
+    projects: "Usage: qa-army projects <list|create> [options]",
     groups: "Usage: qa-army groups <list|get|create|update> [options]",
     tests: "Usage: qa-army tests <list|get|create|update|archive|delete|run> [options]",
     runs: "Usage: qa-army runs <list|create|get|start|watch|wait|cancel> [options]",
@@ -521,7 +519,7 @@ function helpText(subject: readonly string[]): string {
     request: 'Usage: qa-army request capability "command or feature"',
   };
   if (subject[0] && detail[subject[0]]) return detail[subject[0]]!;
-  return `QA.army CLI ${QA_ARMY_CLI_VERSION}\n\nUsage: qa-army [options] <command>\n\nCommands:\n  auth           WorkOS agent registration and native credential lifecycle\n  status         Show safe authentication metadata\n  setup          Create/reuse a Project and Test, then run it to completion\n  workspaces     Manage Workspaces\n  projects       List, create, star, and unstar Projects\n  groups         Manage Test Groups\n  tests          Manage durable Tests and run them remotely\n  runs           List, create, start, wait for, inspect, and cancel Runs\n  prs            Configure and inspect dynamic PR verification (assisted pilot)\n  api-keys       Manage profile API keys using an injected user token\n  capabilities   Print supported and request-capability commands\n  docs [topic]   Print agent-friendly CLI documentation metadata\n  request capability <name>\n                 Produce a stable request receipt for a missing capability\n\nOptions:\n  -V, --version  Print version\n  -h, --help     Show help\n  --json         Accepted on all commands; successful command output is JSON\n\nProduction API: ${QA_ARMY_API_ORIGIN}/v1\nDocumentation: https://qa.army/cli`;
+  return `QA.army CLI ${QA_ARMY_CLI_VERSION}\n\nUsage: qa-army [options] <command>\n\nCommands:\n  auth           WorkOS agent registration and native credential lifecycle\n  status         Show safe authentication metadata\n  setup          Create/reuse a Project and Test, then run it to completion\n  workspaces     Manage Workspaces\n  projects       List and create Projects\n  groups         Manage Test Groups\n  tests          Manage durable Tests and run them remotely\n  runs           List, create, start, wait for, inspect, and cancel Runs\n  builds         Register immutable native build artifacts\n  memories       Manage Project memory and daily clarifications\n  prs            Configure and inspect dynamic PR verification (assisted pilot)\n  api-keys       Manage profile API keys using an injected user token\n  capabilities   Print supported and request-capability commands\n  docs [topic]   Print agent-friendly CLI documentation metadata\n  request capability <name>\n                 Produce a stable request receipt for a missing capability\n\nOptions:\n  -V, --version  Print version\n  -h, --help     Show help\n  --json         Accepted on all commands; successful command output is JSON\n\nProduction API: ${QA_ARMY_API_ORIGIN}/v1\nDocumentation: https://qa.army/cli`;
 }
 
 function readFlags(args: readonly string[]): ReadonlyMap<string, string> {
