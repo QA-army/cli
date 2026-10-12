@@ -27,6 +27,19 @@ function emptyAgentCredentialStore(overrides: Partial<AgentCredentialStore> = {}
 }
 
 describe("QA.army public CLI contract", () => {
+  it("requests owner review without provider consent or automatic approval", async () => {
+    const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({request: {status: "pending_owner"}})));
+    const io = {out: vi.fn(), error: vi.fn()};
+    const project = `prj_${"a".repeat(32)}`, id = `icr_${"b".repeat(32)}`;
+    expect(await runCli(["connections", "request", "--project", project, "--request-key", "stable-request"], {QA_ARMY_ACCESS_TOKEN: "fixture"}, io, request)).toBe(0);
+    expect(request.mock.calls[0]?.[0]).toBe(`https://api.qa.army/v1/projects/${project}/integration-connect-requests`);
+    expect(request.mock.calls[0]?.[1]).toMatchObject({method: "POST", headers: {"idempotency-key": "stable-request"}});
+    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body))).toEqual({provider: "github"});
+    expect(await runCli(["connections", "status", "--request", id], {QA_ARMY_ACCESS_TOKEN: "fixture"}, io, request)).toBe(0);
+    expect(await runCli(["connections", "approve", "--request", id], {QA_ARMY_ACCESS_TOKEN: "fixture"}, io, request)).toBe(1);
+    expect(await runCli(["connections", "request", "--project", project, "--request-key", "stable-request", "--token", "injected"], {QA_ARMY_ACCESS_TOKEN: "fixture"}, io, request)).toBe(1);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
   it.each([1, 2, 3, 4, 5])("reads RunContext v%i without changing the server verdict", async context_schema_version => {
     const request = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ run: { ...runObject("READY"), context_schema_version } })));
     const io = { out: vi.fn(), error: vi.fn() };
