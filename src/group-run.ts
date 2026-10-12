@@ -31,10 +31,9 @@ export async function runGroup(api: Api, input: GroupRunInput) {
       const child: Record<string, unknown> = {test_id:selectedTest.test_id,test_version:selectedTest.version,run_id:run.id,status:run.status,started:false};
       children.push(child);
       stage = 'BINDING';
-      const frozen = object(run.saved_steps);
       if (!/^run_[a-f0-9]{32}$/.test(String(run.id)) || run.project_id !== input.project_id || run.test_group_id !== input.group_id || run.test_id !== selectedTest.test_id
-        || frozen.schema_version !== 'run-saved-steps.v1' || frozen.source !== 'IMMUTABLE_RUN_CONTEXT' || frozen.test_id !== selectedTest.test_id || frozen.test_version !== selectedTest.version
-        || frozen.context_hash !== run.context_hash) throw new Error('Immutable Test version or scope is unavailable or changed');
+        || ![2,3,4,5].includes(Number(run.context_schema_version)) || !Number.isSafeInteger(run.test_version) || run.test_version !== selectedTest.version
+        || !/^sha256:[a-f0-9]{64}$/.test(String(run.context_hash))) throw new Error('Immutable Test version or scope is unavailable or changed');
       child.context_hash=run.context_hash;
       child.evidence_path=`/v1/runs/${run.id}/evidence`;
     }

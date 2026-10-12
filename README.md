@@ -130,7 +130,8 @@ is a separate canonical Run and may consume the normal Run allowance.
 
 All selected Tests are checked for the same Project/Group, enabled state and
 current version before any Run is created. Every created Run must expose the
-matching immutable Test version and context hash before any child is started.
+matching immutable `test_version` from RunContext (schema 2–5) and context hash
+before any child is started. Omitted/null versions never authorize dispatch.
 Older servers without that proof are blocked. A response is `DISPATCHED` or
 `INCOMPLETE`, never an aggregate Test pass. Use returned Run IDs to watch results
 and inspect evidence. A replayed child already beyond READY is reported without

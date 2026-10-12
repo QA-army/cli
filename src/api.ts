@@ -9,7 +9,7 @@ export interface RunReceipt {
   readonly test_id: string;
   readonly run_url: string;
   readonly context_schema_version: 1 | 2 | 3 | 4 | 5;
-  readonly saved_steps?: Readonly<Record<string, unknown>> | null;
+  readonly test_version?: number | null;
   readonly journey?: Readonly<Record<string, unknown>>;
   readonly context_hash: string;
   readonly resolved_at: string;
@@ -187,7 +187,7 @@ function parseRun(value: unknown): RunReceipt {
     project_id: string(run.project_id), test_group_id: run.test_group_id === null ? null : string(run.test_group_id),
     test_id: string(run.test_id), run_url: runUrl(run.run_url, run),
     context_schema_version: run.context_schema_version, context_hash: hash,
-    ...(run.saved_steps !== undefined ? {saved_steps: savedStepsIdentity(run.saved_steps)} : {}),
+    ...(run.test_version !== undefined ? {test_version: frozenTestVersion(run.test_version)} : {}),
     ...(run.journey ? {journey:record(run.journey)} : {}),
     resolved_at: string(run.resolved_at),
     cancellation_requested_at: nullableString(run.cancellation_requested_at),
@@ -234,11 +234,8 @@ function randomUUID() { return globalThis.crypto.randomUUID(); }
 function record(value: unknown): Record<string, unknown> { if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("QA.army returned an invalid Run receipt"); return value as Record<string, unknown>; }
 function string(value: unknown): string { if (typeof value !== "string") throw new Error("QA.army returned an invalid Run receipt"); return value; }
 
-function savedStepsIdentity(value: unknown): Record<string, unknown> | null {
+function frozenTestVersion(value: unknown): number | null {
   if (value === null) return null;
-  const saved = record(value);
-  if (saved.schema_version !== 'run-saved-steps.v1' || saved.source !== 'IMMUTABLE_RUN_CONTEXT'
-    || !/^tst_[a-f0-9]{32}$/.test(String(saved.test_id)) || !Number.isSafeInteger(saved.test_version) || Number(saved.test_version) < 1
-    || !/^sha256:[a-f0-9]{64}$/.test(String(saved.context_hash))) throw new Error('QA.army returned an invalid immutable Test identity');
-  return {schema_version:saved.schema_version,source:saved.source,test_id:saved.test_id,test_version:saved.test_version,context_hash:saved.context_hash};
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) throw new Error('QA.army returned an invalid immutable Test version');
+  return value;
 }
