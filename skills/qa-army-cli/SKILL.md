@@ -38,6 +38,9 @@ waiting and report the terminal receipt when it arrives.
   or access token in a command argument, file, log, or response.
 - Use the native credential store. An injected `QA_ARMY_ACCESS_TOKEN` or
   `QA_ARMY_API_KEY` is acceptable only through the caller's secret mechanism.
+- The same claimed WorkOS agent identity supports Test Group management, full
+  versioned Test updates and Run cancellation. No second credential is needed.
+  Test deletion and credential/admin operations remain outside that capability.
 - A claimed agent identity may be sent only to `https://api.qa.army`.
 - On `401`, let the CLI re-exchange once. On `403`, follow the returned
   machine-actionable remediation; do not broaden scope or substitute a user
@@ -80,3 +83,21 @@ Read [references/capabilities.md](references/capabilities.md) when selecting a
 command or mapping an unavailable operation. Read
 [references/reporting-template.md](references/reporting-template.md) when
 preparing the final QA result.
+
+## Organize and inspect E2E evidence
+
+Use `groups list/create/get/update` for native Test Groups. Move a Test or change
+its enabled state with the current version and full `tests update` definition,
+preserving steps, settings and journey metadata. Each Test belongs to one Group.
+
+CLI 0.2.10+ provides `runs evidence --run <runId>` for finalized artifact metadata
+and `evidence download --evidence <evidenceId> --output <new-file>` for
+integrity-verified bytes. Signed access URLs must never enter logs or reports.
+MCP provides `runs.evidence`; use CLI for artifact downloads.
+
+`groups run` takes explicit Project/Group IDs, a stable `--request-key` and
+`--input` JSON containing `selection` (1–20 `{test_id, version}` entries). Each
+enabled selected Test creates a normal Run; explain that consumption. Missing
+immutable version proof blocks start. Inspect partial receipts and reconcile
+known Run IDs before retrying with the same selection/key; do not silently
+resnapshot or retry uncertain mutations. A dispatch receipt is never a pass.

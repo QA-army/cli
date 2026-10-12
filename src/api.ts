@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { evidenceMetadata } from "./evidence-metadata.js";
 export interface RunReceipt {
   readonly id: string;
   readonly status: RunStatus;
@@ -8,6 +9,7 @@ export interface RunReceipt {
   readonly test_id: string;
   readonly run_url: string;
   readonly context_schema_version: 1 | 2 | 3 | 4 | 5;
+  readonly test_version?: number | null;
   readonly journey?: Readonly<Record<string, unknown>>;
   readonly context_hash: string;
   readonly resolved_at: string;
@@ -36,7 +38,7 @@ export interface CommandRuntime {
 
 export interface ApiAccessTokenProvider {
   accessToken(): Promise<string>;
-  reexchangeAfterUnauthorized(): Promise<string>;
+  reexchangeAfterUnauthorized(rejectedToken?: string): Promise<string>;
 }
 
 const defaultCommandRuntime: CommandRuntime = {
@@ -122,15 +124,20 @@ export class VenkatApi {
       ...(body ? { body: JSON.stringify(body) } : {}),
       ...(signal ? { signal } : {}),
     } satisfies RequestInit;
-    let response = await this.authorizedRequest(url, init, await this.accessToken());
+    const token = await this.accessToken();
+    let response = await this.authorizedRequest(url, init, token);
     if (response.status === 401 && typeof this.credential !== "string") {
       await response.body?.cancel().catch(() => undefined);
-      response = await this.authorizedRequest(url, init, await this.credential.reexchangeAfterUnauthorized());
+      response = await this.authorizedRequest(url, init, await this.credential.reexchangeAfterUnauthorized(token));
     }
     if (!response.ok) throw await apiFailure(response);
     if (response.status === 204) return undefined;
-    const payload = await response.json() as unknown;
-    return path.startsWith("/v1/runs?")
+    let payload: unknown;
+    try { payload = await response.json(); }
+    catch { throw new Error("QA.army returned an invalid API response"); }
+    return /^\/v1\/runs\/run_[a-f0-9]{32}\/evidence$/.test(path)
+      ? evidenceMetadata(payload,path.split("/")[3]!)
+      : path.startsWith("/v1/runs?")
       ? parseRunList(payload, new URL(url).searchParams.get("trigger"))
       : path.includes("/events?")
       ? parseWatch(payload)
@@ -148,6 +155,7 @@ export class VenkatApi {
   private authorizedRequest(url: string, init: RequestInit, accessToken: string): Promise<Response> {
     return this.request(url, {
       ...init,
+      redirect: "error",
       headers: { ...init.headers, authorization: `Bearer ${accessToken}` },
     });
   }
@@ -179,6 +187,7 @@ function parseRun(value: unknown): RunReceipt {
     project_id: string(run.project_id), test_group_id: run.test_group_id === null ? null : string(run.test_group_id),
     test_id: string(run.test_id), run_url: runUrl(run.run_url, run),
     context_schema_version: run.context_schema_version, context_hash: hash,
+    ...(run.test_version !== undefined ? {test_version: frozenTestVersion(run.test_version)} : {}),
     ...(run.journey ? {journey:record(run.journey)} : {}),
     resolved_at: string(run.resolved_at),
     cancellation_requested_at: nullableString(run.cancellation_requested_at),
@@ -224,3 +233,9 @@ function invalid(): never { throw new Error("QA.army returned an invalid Run rec
 function randomUUID() { return globalThis.crypto.randomUUID(); }
 function record(value: unknown): Record<string, unknown> { if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("QA.army returned an invalid Run receipt"); return value as Record<string, unknown>; }
 function string(value: unknown): string { if (typeof value !== "string") throw new Error("QA.army returned an invalid Run receipt"); return value; }
+
+function frozenTestVersion(value: unknown): number | null {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) throw new Error('QA.army returned an invalid immutable Test version');
+  return value;
+}
