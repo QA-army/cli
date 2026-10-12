@@ -32,7 +32,7 @@ Codex: open this repo folder as the project and select Worktree from `main`. `.c
 
 ## Run evidence history
 
-Use `qa-army runs list --test tst_... --trigger manual` for manual Run evidence and `--trigger deploy` for deployment/PR evidence. Omit `--trigger` to retain the all-Runs history. Use `--before` with the returned `next_before` and preserve `--trigger` when paging; `--limit` accepts 1–50 (default 20). The server applies the filter before pagination and retains Workspace authorization. Filtering reads evidence; it never changes Run outcomes or establishes a passing PR check.
+Use `qa-army runs list --test tst_... --trigger manual` for manual Run evidence and `--trigger deploy` for deployment/PR evidence. Omit `--trigger` to retain the all-Runs history. Use `--before` with the returned `next_before` and preserve `--trigger` when paging; `--limit` accepts 1–50 (default 20). The server applies the filter before pagination and retains Workspace authorization. A filtered response with a missing or different Run trigger is rejected, including during a backend rollout. Filtering reads evidence; it never changes Run outcomes or establishes a passing PR check.
 
 ## Product memory
 

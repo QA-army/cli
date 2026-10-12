@@ -223,7 +223,7 @@ describe("QA.army public CLI contract", () => {
 
   it.each(["manual", "deploy"])("filters Run history by %s and preserves pagination", async (trigger) => {
     const testId = `tst_${"4".repeat(32)}`;
-    const page = { runs: [runObject("PASSED")], next_before: "opaque-next" };
+    const page = { runs: [{ ...runObject("PASSED"), trigger }], next_before: "opaque-next" };
     const request = vi.fn<typeof fetch>(async () => json(page));
     const output: string[] = [];
     const io = { out: (value: string) => output.push(value), error: vi.fn() };
@@ -240,6 +240,18 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--trigger", trigger],
       { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(1);
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each(["deploy", "unknown", null, undefined])("rejects filtered evidence with returned trigger %s", async (returnedTrigger) => {
+    const request = vi.fn<typeof fetch>(async () => json({ runs: [
+      { ...runObject("PASSED"), trigger: "manual" },
+      { ...runObject("PASSED"), trigger: returnedTrigger },
+    ], next_before: null }));
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--trigger", "manual"],
+      { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(1);
+    expect(io.out).not.toHaveBeenCalled();
+    expect(io.error).toHaveBeenCalledWith(expect.stringContaining("does not match the requested trigger"));
   });
 
   it("keeps forbidden filtered Run history as an error", async () => {

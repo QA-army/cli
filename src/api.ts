@@ -131,7 +131,7 @@ export class VenkatApi {
     if (response.status === 204) return undefined;
     const payload = await response.json() as unknown;
     return path.startsWith("/v1/runs?")
-      ? parseRunList(payload)
+      ? parseRunList(payload, new URL(url).searchParams.get("trigger"))
       : path.includes("/events?")
       ? parseWatch(payload)
       : path === "/v1/runs" || path.startsWith("/v1/runs/")
@@ -205,9 +205,12 @@ function parseWatch(value: unknown): RunWatchBatch {
     next_after: number(payload.next_after), terminal: payload.terminal,
   };
 }
-function parseRunList(value: unknown): RunListReceipt {
+function parseRunList(value: unknown, trigger: string | null): RunListReceipt {
   const payload = record(value);
   if (!Array.isArray(payload.runs)) invalid();
+  if (trigger !== null && payload.runs.some((run) => record(run).trigger !== trigger)) {
+    throw new Error("QA.army returned Run evidence that does not match the requested trigger");
+  }
   const nextBefore = payload.next_before;
   if (nextBefore !== null && typeof nextBefore !== "string") invalid();
   return { runs: payload.runs.map(parseRun), next_before: nextBefore as string | null };
