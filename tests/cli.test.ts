@@ -217,7 +217,50 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--limit", "20"], environment, io, request, undefined, runtime)).toBe(0);
     expect(await runCli(["runs", "wait", "--run", runId, "--timeout", "5000", "--interval", "100"], environment, io, request, undefined, runtime)).toBe(0);
     expect(String(request.mock.calls[0]?.[0])).toContain(`/v1/runs?test_id=tst_${"4".repeat(32)}&limit=20`);
+    expect(new URL(String(request.mock.calls[0]?.[0])).searchParams.has("trigger")).toBe(false);
     expect(JSON.parse(output[1]!).status).toBe("PASSED");
+  });
+
+  it.each(["manual", "deploy"])("filters Run history by %s and preserves pagination", async (trigger) => {
+    const testId = `tst_${"4".repeat(32)}`;
+    const page = { runs: [{ ...runObject("PASSED"), trigger }], next_before: "opaque-next" };
+    const request = vi.fn<typeof fetch>(async () => json(page));
+    const output: string[] = [];
+    const io = { out: (value: string) => output.push(value), error: vi.fn() };
+    expect(await runCli(["runs", "list", "--test", testId, "--trigger", trigger,
+      "--before", "opaque+/=", "--limit", "1"], { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(0);
+    const url = new URL(String(request.mock.calls[0]?.[0]));
+    expect(Object.fromEntries(url.searchParams)).toEqual({ test_id: testId, limit: "1", before: "opaque+/=", trigger });
+    expect(JSON.parse(output[0]!)).toMatchObject({ runs: [{ status: "PASSED" }], next_before: "opaque-next" });
+  });
+
+  it.each(["pr", "scheduled", "MANUAL", "", "manual&trigger=deploy"])("rejects unsupported Run trigger %j before REST", async (trigger) => {
+    const request = vi.fn<typeof fetch>();
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--trigger", trigger],
+      { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(1);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each(["deploy", "unknown", null, undefined])("rejects filtered evidence with returned trigger %s", async (returnedTrigger) => {
+    const request = vi.fn<typeof fetch>(async () => json({ runs: [
+      { ...runObject("PASSED"), trigger: "manual" },
+      { ...runObject("PASSED"), trigger: returnedTrigger },
+    ], next_before: null }));
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--trigger", "manual"],
+      { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(1);
+    expect(io.out).not.toHaveBeenCalled();
+    expect(io.error).toHaveBeenCalledWith(expect.stringContaining("does not match the requested trigger"));
+  });
+
+  it("keeps forbidden filtered Run history as an error", async () => {
+    const request = vi.fn<typeof fetch>(async () => new Response("{}", { status: 403 }));
+    const io = { out: vi.fn(), error: vi.fn() };
+    expect(await runCli(["runs", "list", "--test", `tst_${"4".repeat(32)}`, "--trigger", "manual"],
+      { QA_ARMY_ACCESS_TOKEN: "token" }, io, request)).toBe(1);
+    expect(io.out).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   it("creates, starts, and waits for a saved Test Run", async () => {
