@@ -73,7 +73,7 @@ Use a user session or profile API key; claimed WorkOS credentials cannot registe
 
 ### Dynamic PR Tests pilot
 
-`prs` commands target the assisted, **DOGFOOD-PENDING** pilot. They require a supported profile credential and Workspace access. Claimed WorkOS credentials do not gain PR-management permissions automatically.
+`prs` commands target the assisted, **DOGFOOD-PENDING** pilot. A governed claimed WorkOS agent can use `prs list`, `prs get`, and explicit `prs rerun` within the claiming user's authorized Workspace. The server retains preview qualification, current-revision checks, idempotency and Run limits. Dynamic settings, configuration, usage, cancellation and promotion remain outside this claimed-agent permission; use a supported user session or profile credential for those operations. Deployment-watch permissions are separate.
 
 ```sh
 qa-army prs list --project prj_...
