@@ -5,7 +5,7 @@
 ## Start
 
 ```sh
-npm install -g https://github.com/QA-army/cli/releases/download/v0.2.10/qa-army-0.2.10.tgz
+npm install -g https://github.com/QA-army/cli/releases/download/v0.2.11/qa-army-0.2.11.tgz
 qa-army auth agent-register --email you@example.com
 qa-army status --json
 qa-army capabilities
@@ -140,3 +140,29 @@ or started children, identified in the partial receipt. Reconcile those IDs
 before retrying; keep the same selection and request key. Preparation failures
 attempt to cancel known READY children before any start; inspect cancellation
 receipts and explicitly cancel any remaining unused READY Runs. Never replace the selection with a fresh list on retry.
+
+## Deployment watch Test Groups
+
+Use `qa-army prs watch --integration int_...` or MCP
+`prs.watch({integration_id})` to read an existing connected GitHub deployment
+watch. Update its full selection with `qa-army prs watch-update --integration
+int_... --input JSON` or `prs.watch_update({integration_id, ...body})`:
+
+```json
+{"repository_id":"123456789","test_group_ids":["tgr_00000000000000000000000000000001"],"enabled":true}
+```
+
+Use the repository ID and actual Group IDs returned by the API. Read first and
+include every Group you intend to keep; this replaces the selection, with no
+hidden merge. At most 50 unique same-Project Groups are allowed; an enabled
+watch needs at least one. The same claimed WorkOS identity can manage the watch
+when its claiming user is a current Workspace OWNER. It cannot create a watch,
+change its repository, reconnect GitHub, or grant provider consent. Profile API
+keys and provisional setup credentials do not authorize these watch operations.
+
+The receipt contains `deployment_watch`, including its new `version`. PUT has
+no `If-Match` or idempotency-key contract: after an uncertain response, read back
+and reconcile rather than retrying blindly. Changes affect subsequent matching
+deployments; they do not start a manual Run or establish a passing PR check.
+Keep unrelated selected Groups and integration settings intact. Inspect the
+canonical exact-head Runs and screenshots after the next qualified deployment.

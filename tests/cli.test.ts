@@ -64,9 +64,9 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["--version"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["projects"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
     expect(await runCli(["api-keys"], {}, io, undefined, undefined, undefined, profileStore, undefined, agentStore)).toBe(0);
-    expect(output[0]).toContain("QA.army CLI 0.2.10");
+    expect(output[0]).toContain("QA.army CLI 0.2.11");
     expect(output[0]).toContain("https://api.qa.army/v1");
-    expect(output[1]).toBe("0.2.10");
+    expect(output[1]).toBe("0.2.11");
     expect(output[2]).toContain("qa-army projects");
     expect(output[3]).toContain("qa-army api-keys");
     expect(profileStore.get).not.toHaveBeenCalled();
@@ -111,7 +111,7 @@ describe("QA.army public CLI contract", () => {
     expect(await runCli(["capabilities", "--json"], {}, { out: (value) => output.push(value), error: vi.fn() })).toBe(0);
     const inventory = JSON.parse(output[0]!);
     expect(inventory).toMatchObject({
-      cli_version: "0.2.10",
+      cli_version: "0.2.11",
       status: "AVAILABLE",
       api_base_url: "https://api.qa.army/v1",
       openapi_url: "https://api.qa.army/v1/openapi.json",
