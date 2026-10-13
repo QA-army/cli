@@ -34,6 +34,27 @@ Codex: open this repo folder as the project and select Worktree from `main`. `.c
 
 Use `qa-army runs list --test tst_... --trigger manual` for manual Run evidence and `--trigger deploy` for deployment/PR evidence. Omit `--trigger` to retain the all-Runs history. Use `--before` with the returned `next_before` and preserve `--trigger` when paging; `--limit` accepts 1–50 (default 20). The server applies the filter before pagination and retains Workspace authorization. A filtered response with a missing or different Run trigger is rejected, including during a backend rollout. Filtering reads evidence; it never changes Run outcomes or establishes a passing PR check.
 
+## PR review links with QA.army evidence (release validation pending)
+
+```sh
+qa-army prs approval-links --project prj_... --json
+```
+
+This command and MCP `prs.approval_links({ project_id })` call the same
+authenticated `GET /v1/projects/{projectId}/pr-approval-links` endpoint.
+QA.army's proprietary cloud service owns authorization, GitHub observations and
+evidence aggregation; the public CLI remains a thin adapter.
+The response identifies `project_id`, `observed_at`, `scope: "qa_observed_prs"`,
+`truncated`, and `items` with review links, current and recorded heads, checks,
+Runs, `evidence_status` and reasons. Preserve missing, stale, failed and blocked
+evidence and any truncation warning. This covers PRs QA.army observed for the
+Project, not all PRs assigned to the user.
+
+Review links navigate to human review; this command does not approve, merge,
+start Runs or establish merge readiness. API errors remain errors. Availability
+requires the matching server endpoint, an authorized credential and a released
+client; this source addition alone does not establish live availability.
+
 ## Product memory
 
 Memory management is undergoing release validation. Use a user session or profile API key; claimed WorkOS credentials do not authorize Memory management. Review evidence before approving proposals and keep credentials in Test Accounts. Published memory assists Test creation and individual Run actions; saved assertions still verify current behavior.

@@ -48,6 +48,16 @@ Use an authenticated user session or profile API key. Setup-only WorkOS agent cr
 
 When the Workspace is enrolled and the installed CLI supports them, use `qa-army prs list --project prj_...`, `prs get --verification prv_...`, and `prs usage --workspace wsp_...` for reports and shared usage. MCP equivalents are `prs.list`, `prs.get`, and `prs.usage`.
 
+For PR approval links with QA.army evidence, the pending client/server release adds
+`qa-army prs approval-links --project prj_...` and MCP
+`prs.approval_links({ project_id })`. Check installed capabilities first. Return
+the server's links, observation time, current and recorded heads, evidence status,
+reasons and truncation warning. Its `qa_observed_prs` scope covers only the
+authorized Project's QA-observed PRs, not every assigned review. Do not infer
+approval or merge readiness from a link or historical pass. Missing, stale,
+failed and blocked evidence remains so. The operation only reads; never approve,
+merge, start Runs or substitute credentials to make this prompt succeed.
+
 `prs settings` and `prs configure` use an existing integration ID. Configuration is owner-only and requires the selected GitHub repository, selected Vercel Project, sandbox confirmation, and any required sandbox accounts. Restricted agent setup credentials cannot manage the pilot.
 
 Cancellation, explicit rerun and regression promotion use `prs cancel`, `prs rerun` and `prs promote` with a stable `--request-key`. A rerun may consume up to three new Runs; explain that before requesting one. Never retry an ambiguous target mutation automatically. Generated Tests are immutable; promotion creates an editable copy in the chosen group. Do not call missing coverage, infrastructure errors or absent evidence a pass. Pilot thresholds are targets, not proven results.

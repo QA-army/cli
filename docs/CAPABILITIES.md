@@ -18,6 +18,13 @@ Run `qa-army capabilities --json` for the exact versioned inventory. A missing
 command returns a stable `REQUEST_CAPABILITY` receipt and exit code `2` before
 authentication or mutation.
 
+`prs approval-links --project prj_...` is a read-only adapter in source, pending
+server and client release validation. Its MCP equivalent is `prs.approval_links`.
+It returns server-owned review links and evidence for QA-observed PRs only, with
+observation time, current and recorded heads, evidence status and truncation.
+It does not list all assigned reviews or establish approval/merge readiness.
+Unavailable or unauthorized server responses remain errors, not empty success.
+
 This mapping is based on TesterArmy CLI `0.9.0` and its public `cli` repository,
 observed on 2026-09-09. It records command parity only; QA.army retains its own
 WorkOS identity, Workspace authorization, API, Test, Run, evidence, and billing
