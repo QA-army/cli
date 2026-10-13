@@ -46,7 +46,7 @@ Use an authenticated user session or profile API key. Setup-only WorkOS agent cr
 
 ## Dynamic PR Tests assisted pilot — DOGFOOD-PENDING
 
-When the Workspace is enrolled and the installed CLI supports them, use `qa-army prs list --project prj_...`, `prs get --verification prv_...`, and `prs usage --workspace wsp_...` for reports and shared usage. MCP equivalents are `prs.list`, `prs.get`, and `prs.usage`.
+When the Workspace is enrolled and the installed CLI supports them, a governed claimed WorkOS agent can read reports with `qa-army prs list --project prj_...` and `prs get --verification prv_...`, and explicitly request a new attempt with `prs rerun --verification prv_... --request-key rerun-pr-001`. MCP equivalents are `prs.list`, `prs.get`, and `prs.rerun`. The server checks the claiming user's current Workspace access and retains preview qualification, current-revision checks, idempotency and Run limits. This permission does not include dynamic settings, configuration, usage, cancellation or promotion; those require a supported user session or profile credential. Deployment-watch permissions are separate.
 
 For PR approval links with QA.army evidence, the pending client/server release adds
 `qa-army prs approval-links --project prj_...` and MCP
