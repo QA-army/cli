@@ -194,12 +194,29 @@ deployments; they do not start a manual Run or establish a passing PR check.
 Keep unrelated selected Groups and integration settings intact. Inspect the
 canonical exact-head Runs and screenshots after the next qualified deployment.
 
-## Invitations and shared reports (release validation pending)
+## Private report access and invitations (release validation pending)
 
 A Test or Run link is private to its Workspace. Signing in proves identity; it
-does not grant Workspace access. New teammates must receive an invitation to
-their sign-in email and explicitly join in the browser. Copying a report link
-or an access-request message never sends an invitation or grants access.
+does not grant Workspace access. A signed-in person without access can select
+**Request access** in the browser. This submits a real request for Workspace
+Member access, not permission to only one report. A Workspace owner reviews it
+and selects **Approve** or **Deny**. Approval grants Member access directly;
+this request flow does not require a second invitation acceptance.
+
+The requester can **Check status**, then **Open shared result** once current
+membership permits access. Pending or denied requests grant nothing. A denied
+request, or an old approval after membership was removed, requires a deliberate
+new request; refreshing or replaying approval cannot restore access. The app
+retains the validated shared destination across sign-in and review. No email
+notification or automatic approval is promised.
+
+Request submission, status and owner decisions belong in the browser. CLI/MCP
+provide no access-request or approval commands; claimed agents and profile API
+keys cannot perform these operations. Copying a link does not submit a request.
+These improvements require the matching platform release and journey validation.
+
+Owners can also invite a teammate by email. That separate flow requires the
+recipient to sign in with the invited email and explicitly accept in the browser.
 
 `qa-army invitations create --workspace wsp_... --input JSON` forwards the
 canonical body unchanged: `{"emails":["teammate@example.com"],"return_to":"<relative Test or Run path>"}`.
