@@ -85,7 +85,7 @@ qa-army prs cancel --verification prv_... --request-key cancel-pr-001
 qa-army prs promote --verification prv_... --test tst_... --group tgr_... --request-key promote-pr-001
 ```
 
-Enable only after configuring the matching Vercel Project and confirming sandbox safety. Planning is included; each completed generated Test consumes one shared Workspace Run. `prs rerun --verification prv_... --request-key rerun-pr-001` explicitly creates a new attempt and may consume up to three new Runs. Reuse a request key after an uncertain response; do not automatically rerun ambiguous mutations. No applicable coverage is not a passing result.
+Enable only after configuring the matching Vercel Project and confirming sandbox safety. Dynamic PR configuration requires an active pilot allowance. Planning is included; each generated Test that ends `PASSED` or `FAILED` consumes one Run from the applicable shared allowance. `ERROR` Runs do not consume the allowance. When Free usage applies, Runs use the allowance of 10 free Runs every 30 days for the account that configured the automation, shared across all Workspaces. The fixed cycle starts when QA.army first activates that account's free allowance. Run, login and Workspace activity do not restart it; creating or joining a Workspace does not add free Runs. Unused free Runs do not roll over. Paid plans use the Workspace allowance. `prs rerun --verification prv_... --request-key rerun-pr-001` explicitly creates a new attempt and may consume up to three new Runs. Reuse a request key after an uncertain response; do not automatically rerun ambiguous mutations. No applicable coverage is not a passing result.
 
 ## ACT outcomes
 
