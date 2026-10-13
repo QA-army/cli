@@ -12,7 +12,7 @@ keeps recognized gaps visible as `[request capability]`.
 | Runs | List/create/get/start/watch/wait/cancel, finalized evidence metadata | Cross-Project aggregate queries |
 | Context | — | Memories |
 | Mobile | Mobile Projects and immutable build list/reserve/complete | Native artifact selection and execution |
-| Automation | Durable cloud Run primitives | CI orchestration and dynamic PR agents |
+| Automation | Durable cloud Run primitives, existing deployment-watch selection (`prs watch`, `prs watch-update`) | CI orchestration and dynamic PR agents |
 
 Run `qa-army capabilities --json` for the exact versioned inventory. A missing
 command returns a stable `REQUEST_CAPABILITY` receipt and exit code `2` before
