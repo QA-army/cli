@@ -20,10 +20,12 @@ authentication or mutation.
 
 `prs approval-links --project prj_...` is a read-only adapter in source, pending
 server and client release validation. Its MCP equivalent is `prs.approval_links`.
-It returns server-owned review links and evidence for QA-observed PRs only, with
-observation time, current and recorded heads, evidence status and truncation.
+It returns server-owned review links and evidence for at most 10 QA-observed PRs,
+with server QA state, freshness and truncation. Observed checks do not establish
+the repository's required branch rules. Use an authorized Cognito user session
+or governed claimed WorkOS agent; API keys and setup-only credentials are denied.
 It does not list all assigned reviews or establish approval/merge readiness.
-Unavailable or unauthorized server responses remain errors, not empty success.
+Unavailable or unauthorized responses remain errors, without identity fallback.
 
 This mapping is based on TesterArmy CLI `0.9.0` and its public `cli` repository,
 observed on 2026-09-09. It records command parity only; QA.army retains its own

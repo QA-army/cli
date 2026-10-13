@@ -44,11 +44,17 @@ This command and MCP `prs.approval_links({ project_id })` call the same
 authenticated `GET /v1/projects/{projectId}/pr-approval-links` endpoint.
 QA.army's proprietary cloud service owns authorization, GitHub observations and
 evidence aggregation; the public CLI remains a thin adapter.
-The response identifies `project_id`, `observed_at`, `scope: "qa_observed_prs"`,
-`truncated`, and `items` with review links, current and recorded heads, checks,
-Runs, `evidence_status` and reasons. Preserve missing, stale, failed and blocked
-evidence and any truncation warning. This covers PRs QA.army observed for the
-Project, not all PRs assigned to the user.
+
+Use an authorized Cognito user session or a governed claimed WorkOS agent.
+Profile API keys and setup-only credentials are denied. Preserve `403` as an
+error; never switch identities or substitute credentials to bypass it.
+
+The response covers at most 10 QA-observed PRs for the Project, not all PRs
+assigned to the user. Show the returned review links and server `qa_state`,
+freshness and evidence reasons; preserve any truncation warning. Selected Run
+attempts, evidence finalization and cleanup affect evidence readiness. Observed
+checks are not the repository's required branch rules. Preserve missing, stale,
+failed and blocked evidence.
 
 Review links navigate to human review; this command does not approve, merge,
 start Runs or establish merge readiness. API errors remain errors. Availability

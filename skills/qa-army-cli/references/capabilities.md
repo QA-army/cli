@@ -50,10 +50,14 @@ When the Workspace is enrolled and the installed CLI supports them, use `qa-army
 
 For PR approval links with QA.army evidence, the pending client/server release adds
 `qa-army prs approval-links --project prj_...` and MCP
-`prs.approval_links({ project_id })`. Check installed capabilities first. Return
-the server's links, observation time, current and recorded heads, evidence status,
-reasons and truncation warning. Its `qa_observed_prs` scope covers only the
-authorized Project's QA-observed PRs, not every assigned review. Do not infer
+`prs.approval_links({ project_id })`. Check installed capabilities first. Use an
+authorized Cognito user session or governed claimed WorkOS agent; profile API
+keys and setup-only credentials are denied. A `403` stays an error, without
+identity fallback. Return the server's links, `qa_state`, freshness, evidence
+reasons and truncation warning. Its `qa_observed_prs` scope covers at most 10
+authorized Project PRs, not every assigned review. Selected Run attempts,
+finalized evidence and cleanup matter; observed checks are not the repository's
+required branch rules. Do not infer
 approval or merge readiness from a link or historical pass. Missing, stale,
 failed and blocked evidence remains so. The operation only reads; never approve,
 merge, start Runs or substitute credentials to make this prompt succeed.
