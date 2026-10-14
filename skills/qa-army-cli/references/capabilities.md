@@ -65,3 +65,37 @@ merge, start Runs or substitute credentials to make this prompt succeed.
 `prs settings` and `prs configure` use an existing integration ID. Configuration is owner-only and requires the selected GitHub repository, selected Vercel Project, sandbox confirmation, and any required sandbox accounts. Restricted agent setup credentials cannot manage the pilot.
 
 Cancellation, explicit rerun and regression promotion use `prs cancel`, `prs rerun` and `prs promote` with a stable `--request-key`. A rerun may consume up to three new Runs; explain that before requesting one. Never retry an ambiguous target mutation automatically. Generated Tests are immutable; promotion creates an editable copy in the chosen group. Do not call missing coverage, infrastructure errors or absent evidence a pass. Pilot thresholds are targets, not proven results.
+
+## Workspace invitations and private report links
+
+`qa-army invitations create --workspace wsp_... --input JSON` forwards the
+canonical `{emails, return_to?}` body. MCP `invitations.create` takes the same
+fields plus `workspace_id`; optional destination support requires its matching
+client/server release. `return_to` is a raw relative same-Workspace Test or Run
+path; it cannot grant access or point to another origin. The server validates
+resource ancestry and owner permissions.
+
+Invitation management requires a Workspace owner with an authorized user session
+or profile API key. Claimed WorkOS agents and setup credentials cannot invite or
+accept for someone else. Direct recipients to the invitation email and browser
+sign-in using that email, followed by explicit acceptance. CLI/MCP provide no
+recipient acceptance, list, resend or revoke command; use the app for these tasks.
+
+Report links remain Workspace-private. In the matching platform release, a
+signed-in person can select **Request access** in the browser to submit a real
+request for Workspace Member access. A Workspace owner can **Approve** or
+**Deny**; approval directly grants Member access without an invitation step.
+Submission alone grants nothing. Use **Check status** and open the shared result
+only when current membership allows it. Denied requests and old approvals after
+membership removal require a deliberate new request; replay cannot regrant access.
+No automatic re-request or email notification is promised. Copying a link does
+not submit a request. This flow remains subject to release validation.
+
+CLI/MCP expose no request, status or approval commands. These browser operations
+require the appropriate human identity and owner policy; claimed agents and
+profile API keys cannot use them. Invitation creation is a separate capability.
+Preserve invitation `SENT` as provider acceptance, not inbox receipt or membership.
+After an uncertain invitation-create response, check pending invitations in the
+app before sending again; separate invocations use new request keys. Expired
+invitation links need owner recovery; resend invalidates the earlier link. Do not
+bypass a denial with another credential.

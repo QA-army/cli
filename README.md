@@ -193,3 +193,55 @@ and reconcile rather than retrying blindly. Changes affect subsequent matching
 deployments; they do not start a manual Run or establish a passing PR check.
 Keep unrelated selected Groups and integration settings intact. Inspect the
 canonical exact-head Runs and screenshots after the next qualified deployment.
+
+## Private report access and invitations (release validation pending)
+
+A Test or Run link is private to its Workspace. Signing in proves identity; it
+does not grant Workspace access. A signed-in person without access can select
+**Request access** in the browser. This submits a real request for Workspace
+Member access, not permission to only one report. A Workspace owner reviews it
+and selects **Approve** or **Deny**. Approval grants Member access directly;
+this request flow does not require a second invitation acceptance.
+
+The requester can **Check status**, then **Open shared result** once current
+membership permits access. Pending or denied requests grant nothing. A denied
+request, or an old approval after membership was removed, requires a deliberate
+new request; refreshing or replaying approval cannot restore access. The app
+retains the validated shared destination across sign-in and review. No email
+notification or automatic approval is promised.
+
+Request submission, status and owner decisions belong in the browser. CLI/MCP
+provide no access-request or approval commands; claimed agents and profile API
+keys cannot perform these operations. Copying a link does not submit a request.
+These improvements require the matching platform release and journey validation.
+
+Owners can also invite a teammate by email. That separate flow requires the
+recipient to sign in with the invited email and explicitly accept in the browser.
+
+`qa-army invitations create --workspace wsp_... --input JSON` forwards the
+canonical body unchanged: `{"emails":["teammate@example.com"],"return_to":"<relative Test or Run path>"}`.
+Omit `return_to` when there is no shared destination.
+
+Use a supported user session or profile API key belonging to a Workspace owner.
+Claimed WorkOS agents and setup credentials cannot manage invitations. Do not
+copy browser tokens or change credentials to bypass a denial. Recipient preview
+and acceptance require the invited person's verified browser identity; there is
+no CLI/MCP recipient acceptance command.
+
+`return_to` is optional navigation metadata, with this exact path shape:
+`/dashboard/<workspace-slug>/projects/<project-id>/tests/<test-id>` or that Test
+path followed by `/runs/<run-id>`. Use IDs from the API and the Workspace's actual
+slug. Do not include an origin, query, fragment or encoded separators. The server
+checks the resource belongs to the authorized Workspace; the path grants no
+access. Without it, the invitation opens the Workspace. Destination support
+requires the matching server release; source support alone does not prove live
+availability.
+
+Preserve delivery receipts. `SENT` means the email provider accepted the message,
+not that the recipient received it or joined. A timeout or delivery error can
+leave a pending invitation. Check the app's pending invitations before sending
+again; each client invocation creates a new request key. Use the browser to
+review, resend or revoke invitations. Resend replaces the old link, preserves the
+saved destination and starts a new seven-day expiry. Revoked invitations require
+a deliberately new invitation. Revoking an invitation does not remove a member
+who has already joined.
