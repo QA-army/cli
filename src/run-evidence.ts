@@ -79,9 +79,18 @@ export async function addFailureDiagnostics(
     api.operation(`/v1/runs/${encodeURIComponent(run.id)}/evidence`),
     readLedger(api, run.id),
   ]);
-  const evidence = catalogResult.status === "fulfilled" ? evidenceArtifacts(catalogResult.value) : [];
+  let evidence: readonly EvidenceArtifact[] = [];
+  let catalogAvailable = false;
+  if (catalogResult.status === "fulfilled") {
+    try {
+      evidence = evidenceArtifacts(catalogResult.value);
+      catalogAvailable = true;
+    } catch {
+      // A malformed optional diagnostic response must not hide the terminal Run.
+    }
+  }
   const events = ledgerResult.status === "fulfilled" ? ledgerResult.value.events : undefined;
-  const report = buildReport(run, evidence, events, catalogResult.status === "fulfilled");
+  const report = buildReport(run, evidence, events, catalogAvailable);
   const failed = report.steps.find((step) => step.result === "FAILED" || step.result === "ERROR");
   return {
     ...run,
@@ -96,7 +105,7 @@ export async function addFailureDiagnostics(
         ?? sanitizeText(run.outcome_summary ?? `Run ended with ${run.status}`),
       evidence_url: run.run_url,
       details_available: Boolean(failed),
-      evidence_available: catalogResult.status === "fulfilled" && evidence.length > 0,
+      evidence_available: catalogAvailable && evidence.length > 0,
     },
   };
 }
@@ -303,7 +312,7 @@ function uniqueRefs(refs: readonly EvidenceRef[]): readonly EvidenceRef[] {
 
 function sanitizeInstruction(value: string): string {
   return sanitizeText(value)
-    .replace(/\b(type|fill|enter|input)\s+("[^"]*"|'[^']*'|[^\s,;]+)(?=\s+(?:into|in|for|to)\b)/gi, "$1 [REDACTED]");
+    .replace(/\b(type|fill|enter|input)\s+(.+?)(?=\s+(?:into|in|for|to)\b)/gi, "$1 [REDACTED]");
 }
 
 function sanitizeText(value: string): string {
