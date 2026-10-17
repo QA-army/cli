@@ -30,6 +30,28 @@ Packaging changes also require `npm run verify:public`. Keep Linux, macOS, and W
 
 Codex: open this repo folder as the project and select Worktree from `main`. `.codex/environments/environment.toml` provides setup, cleanup, and actions; dependency installation is explicit.
 
+## Diagnose failed Runs
+
+```sh
+qa-army runs get --run run_... --json
+qa-army runs wait --run run_... --json
+qa-army runs evidence --run run_... --json
+```
+
+Failed `runs get` and `runs wait` receipts include a concise `failure` object with
+the first failed/error step, instruction, reason, and server-owned Run evidence
+URL. Without `--json`, they print that diagnosis as one line. If finalized
+evidence or the normalized event ledger is temporarily unavailable, the command
+still returns the Run and falls back to its outcome summary.
+
+`runs evidence` combines finalized artifact metadata with safe v2 Run events to
+show each step's index, type, instruction, result, failure/assertion detail, and
+related screenshot or other evidence IDs. Human output includes copyable
+`evidence download` commands; JSON includes the same artifact references and the
+Run evidence URL. The Product API does not expose permanent direct artifact
+URLs. Typed values, passwords, tokens, and other sensitive step details are
+redacted; signed download capabilities are never printed.
+
 ## Run evidence history
 
 Use `qa-army runs list --test tst_... --trigger manual` for manual Run evidence and `--trigger deploy` for deployment/PR evidence. Omit `--trigger` to retain the all-Runs history. Use `--before` with the returned `next_before` and preserve `--trigger` when paging; `--limit` accepts 1–50 (default 20). The server applies the filter before pagination and retains Workspace authorization. A filtered response with a missing or different Run trigger is rejected, including during a backend rollout. Filtering reads evidence; it never changes Run outcomes or establishes a passing PR check.

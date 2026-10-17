@@ -100,8 +100,9 @@ export class VenkatApi {
     body?: unknown,
     version?: number,
     idempotencyKey?: string,
+    accept = "application/json",
   ): Promise<unknown> {
-    return this.call(path, method, body, idempotencyKey ?? (method === "POST" ? randomUUID() : undefined), version);
+    return this.call(path, method, body, idempotencyKey ?? (method === "POST" ? randomUUID() : undefined), version, undefined, accept);
   }
 
   private async call(
@@ -111,12 +112,13 @@ export class VenkatApi {
     key?: string,
     version?: number,
     signal?: AbortSignal,
+    accept = "application/json",
   ) {
     const url = `${this.baseUrl.replace(/\/$/, "")}${path}`;
     const init = {
       method,
       headers: {
-        accept: "application/json",
+        accept,
         ...(body ? { "content-type": "application/json" } : {}),
         ...(key ? { "idempotency-key": key } : {}),
         ...(version ? { "if-match": String(version) } : {}),
@@ -135,7 +137,9 @@ export class VenkatApi {
     let payload: unknown;
     try { payload = await response.json(); }
     catch { throw new Error("QA.army returned an invalid API response"); }
-    return /^\/v1\/runs\/run_[a-f0-9]{32}\/evidence$/.test(path)
+    return accept !== "application/json"
+      ? payload
+      : /^\/v1\/runs\/run_[a-f0-9]{32}\/evidence$/.test(path)
       ? evidenceMetadata(payload,path.split("/")[3]!)
       : path.startsWith("/v1/runs?")
       ? parseRunList(payload, new URL(url).searchParams.get("trigger"))

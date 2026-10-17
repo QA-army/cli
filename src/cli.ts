@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { VenkatApi, type CommandRuntime } from "./api.js";
+import { VenkatApi, type CommandRuntime, type RunReceipt } from "./api.js";
 import { ExecutorInlineFunctionOnlyTransport, parseRunWebCommand, type RunWebTransport } from "./web-run-client.js";
 import {
   NativeApiKeyCredentialStore,
@@ -12,6 +12,13 @@ import { WorkosAgentAccessTokenProvider } from "./agent-access-token.js";
 import { WorkosAgentRegistrationClient, type AgentRegistrationProtocol } from "./workos-agent-registration.js";
 import { downloadEvidence } from "./evidence-download.js";
 import { runGroup, type GroupRunInput } from "./group-run.js";
+import {
+  addFailureDiagnostics,
+  evidenceText,
+  failureLine,
+  runEvidenceReport,
+  type RunEvidenceReport,
+} from "./run-evidence.js";
 import { setupProject } from "./setup.js";
 
 export const QA_ARMY_CLI_VERSION = "0.2.11";
@@ -82,6 +89,7 @@ export async function runCli(
   agentProtocol: AgentRegistrationProtocol = new WorkosAgentRegistrationClient(request),
 ): Promise<number> {
   try {
+    const jsonOutput = args.includes("--json");
     if (args.includes("--api-key")) {
       throw new Error("API keys must not be provided in process arguments; use WorkOS agent registration or secret injection");
     }
@@ -229,7 +237,16 @@ export async function runCli(
       return 0;
     }
     const options = readFlags(flags);
-    const result = await execute(api, resource, action, options);
+    let result = await execute(api, resource, action, options);
+    if (resource === "runs" && (action === "get" || action === "wait") && failedRun(result)) {
+      result = await addFailureDiagnostics(api, result);
+      io.out(jsonOutput ? JSON.stringify(result, null, 2) : failureLine(result));
+      return 0;
+    }
+    if (resource === "runs" && action === "evidence" && !jsonOutput) {
+      io.out(evidenceText(result as RunEvidenceReport));
+      return 0;
+    }
     io.out(JSON.stringify(result, null, 2));
     return resource === "groups" && action === "run" && (result as {status?:string}).status === "INCOMPLETE" ? 1 : 0;
   } catch (error) {
@@ -441,7 +458,10 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
     }
     case "runs.create": onlyFlags(flags, ["--test"]); return api.create(rawId(flags, "--test", "tst"));
     case "evidence.download": onlyFlags(flags, ["--evidence", "--output"]); return downloadEvidence(api,rawId(flags,"--evidence","evd"),required(flags,"--output"));
-    case "runs.evidence": onlyFlags(flags, ["--run"]); return api.operation(`/v1/runs/${id(flags, "--run", "run")}/evidence`);
+    case "runs.evidence": {
+      onlyFlags(flags, ["--run"]);
+      return runEvidenceReport(api, rawId(flags, "--run", "run"));
+    }
     case "runs.get": onlyFlags(flags, ["--run"]); return api.get(rawId(flags, "--run", "run"));
     case "runs.start": onlyFlags(flags, ["--run"]); return api.start(rawId(flags, "--run", "run"));
     case "runs.watch": onlyFlags(flags, ["--run", "--after"]); return api.watch(rawId(flags, "--run", "run"), optionalCursor(flags));
@@ -466,7 +486,18 @@ function capabilityInventory() {
     request_capability: requestedCommands,
     api_base_url: `${QA_ARMY_API_ORIGIN}/v1`,
     openapi_url: `${QA_ARMY_API_ORIGIN}/v1/openapi.json`,
+    run_failure_diagnostics: {
+      commands: ["runs get", "runs wait", "runs evidence"],
+      structured_output_flag: "--json",
+      redacts_typed_and_sensitive_values: true,
+    },
   };
+}
+
+function failedRun(value: unknown): value is RunReceipt {
+  return Boolean(value && typeof value === "object"
+    && ("status" in value)
+    && ((value as { status?: unknown }).status === "FAILED" || (value as { status?: unknown }).status === "ERROR"));
 }
 
 function requestedCapability(args: readonly string[]): string | undefined {
@@ -520,6 +551,9 @@ function helpText(subject: readonly string[]): string {
   if (topic && requestedCapability(subject)) {
     return `qa-army ${topic}\n\n[request capability] Recognized for parity, but not backed by a production QA.army API.\nRun: qa-army request capability "${topic}"`;
   }
+  if (topic === "runs evidence") {
+    return "Usage: qa-army runs evidence --run run_... [--json]\n\nShows per-step outcomes, failure reasons, and finalized artifact references. Sensitive typed values and passwords are redacted.\n\nExamples:\n  qa-army runs evidence --run run_...\n  qa-army runs evidence --run run_... --json";
+  }
   const detail: Record<string, string> = {
     builds: "Usage: qa-army builds <list|reserve|complete> [--project prj_...] [--input JSON --request-key KEY] [--build nbd_...]",
     prs: "Usage: qa-army prs <approval-links|list|get|cancel|rerun|promote|settings|configure|usage|watch|watch-update> --project prj_... | --verification prv_... | --integration int_... | --workspace wsp_... [--input JSON] [--test tst_... --group tgr_...] [--request-key KEY]. approval-links reads QA-observed PR review links and evidence, not approval or merge readiness. Dynamic verification commands are pilot-only; watch/watch-update manage an existing GitHub deployment watch. Reruns may consume up to three new Runs; planning is included.",
@@ -530,14 +564,14 @@ function helpText(subject: readonly string[]): string {
     projects: "Usage: qa-army projects <list|create|star|unstar> [options]",
     groups: "Usage: qa-army groups <list|get|create|update|run> [options]",
     tests: "Usage: qa-army tests <list|get|create|update|archive|delete|run> [options]",
-    runs: "Usage: qa-army runs <list|create|get|start|watch|wait|cancel|evidence> [options]",
+    runs: "Usage: qa-army runs <list|create|get|start|watch|wait|cancel|evidence> [options]\n\nExamples:\n  qa-army runs get --run run_... --json\n  qa-army runs wait --run run_... --json\n  qa-army runs evidence --run run_... --json",
     evidence: "Usage: qa-army evidence download --evidence evd_... --output <new-file>",
     "api-keys": "Usage: qa-army api-keys <list|create|revoke> [options]",
     capabilities: "Usage: qa-army capabilities [--json]",
     request: 'Usage: qa-army request capability "command or feature"',
   };
   if (subject[0] && detail[subject[0]]) return detail[subject[0]]!;
-  return `QA.army CLI ${QA_ARMY_CLI_VERSION}\n\nUsage: qa-army [options] <command>\n\nCommands:\n  auth           WorkOS agent registration and native credential lifecycle\n  status         Show safe authentication metadata\n  setup          Create/reuse a Project and Test, then run it to completion\n  workspaces     Manage Workspaces\n  projects       List, create, star, and unstar Projects\n  groups         Manage Test Groups\n  tests          Manage durable Tests and run them remotely\n  runs           List, create, start, wait for, inspect, and cancel Runs\n  prs            Read PR evidence links; manage deployment watch and dynamic verification\n  api-keys       Manage profile API keys using an injected user token\n  capabilities   Print supported and request-capability commands\n  docs [topic]   Print agent-friendly CLI documentation metadata\n  request capability <name>\n                 Produce a stable request receipt for a missing capability\n\nOptions:\n  -V, --version  Print version\n  -h, --help     Show help\n  --json         Accepted on all commands; successful command output is JSON\n\nProduction API: ${QA_ARMY_API_ORIGIN}/v1\nDocumentation: https://qa.army/cli`;
+  return `QA.army CLI ${QA_ARMY_CLI_VERSION}\n\nUsage: qa-army [options] <command>\n\nCommands:\n  auth           WorkOS agent registration and native credential lifecycle\n  status         Show safe authentication metadata\n  setup          Create/reuse a Project and Test, then run it to completion\n  workspaces     Manage Workspaces\n  projects       List, create, star, and unstar Projects\n  groups         Manage Test Groups\n  tests          Manage durable Tests and run them remotely\n  runs           List, create, start, wait for, inspect, and cancel Runs\n  prs            Read PR evidence links; manage deployment watch and dynamic verification\n  api-keys       Manage profile API keys using an injected user token\n  capabilities   Print supported and request-capability commands\n  docs [topic]   Print agent-friendly CLI documentation metadata\n  request capability <name>\n                 Produce a stable request receipt for a missing capability\n\nOptions:\n  -V, --version  Print version\n  -h, --help     Show help\n  --json         Print structured JSON (failure and evidence commands otherwise use concise text)\n\nProduction API: ${QA_ARMY_API_ORIGIN}/v1\nDocumentation: https://qa.army/cli`;
 }
 
 function readFlags(args: readonly string[]): ReadonlyMap<string, string> {

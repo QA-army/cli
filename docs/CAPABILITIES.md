@@ -9,7 +9,7 @@ keeps recognized gaps visible as `[request capability]`.
 | Projects | Workspace-scoped list/create, star/unstar | Get/update/delete, environments, credentials, files |
 | Tests | List/get/create/update/archive/delete, authored steps, remote run | Enable/disable shortcuts, local/environment/mobile variants |
 | Test Groups | List/get/create/update, explicit versioned selection run | Membership shortcuts, delete |
-| Runs | List/create/get/start/watch/wait/cancel, finalized evidence metadata | Cross-Project aggregate queries |
+| Runs | List/create/get/start/watch/wait/cancel, failed-Run diagnosis, per-step results and finalized evidence metadata | Cross-Project aggregate queries |
 | Context | — | Memories |
 | Mobile | Mobile Projects and immutable build list/reserve/complete | Native artifact selection and execution |
 | Automation | Durable cloud Run primitives, existing deployment-watch selection (`prs watch`, `prs watch-update`) | CI orchestration and dynamic PR agents |
@@ -17,6 +17,16 @@ keeps recognized gaps visible as `[request capability]`.
 Run `qa-army capabilities --json` for the exact versioned inventory. A missing
 command returns a stable `REQUEST_CAPABILITY` receipt and exit code `2` before
 authentication or mutation.
+
+`runs get --run run_... --json` and `runs wait --run run_... --json` add a
+`failure` object for `FAILED` and `ERROR` Runs. `runs evidence --run run_...
+[--json]` combines the finalized evidence catalog with the normalized v2 event
+ledger to report step index/type/instruction/result, failure or assertion
+detail, and related artifact IDs. It redacts typed and sensitive values. The
+evidence API currently returns artifact metadata rather than permanent artifact
+URLs, so output links to the server-owned Run page and supplies
+`evidence download` commands. A missing evidence catalog does not hide the
+terminal Run outcome.
 
 `prs approval-links --project prj_...` is a read-only adapter in source, pending
 server and client release validation. Its MCP equivalent is `prs.approval_links`.

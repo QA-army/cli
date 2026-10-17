@@ -90,10 +90,14 @@ Use `groups list/create/get/update` for native Test Groups. Move a Test or chang
 its enabled state with the current version and full `tests update` definition,
 preserving steps, settings and journey metadata. Each Test belongs to one Group.
 
-CLI 0.2.10+ provides `runs evidence --run <runId>` for finalized artifact metadata
-and `evidence download --evidence <evidenceId> --output <new-file>` for
-integrity-verified bytes. Signed access URLs must never enter logs or reports.
-MCP provides `runs.evidence`; use CLI for artifact downloads.
+CLI provides `runs evidence --run <runId> [--json]` for per-step results and
+finalized artifact references, and `evidence download --evidence <evidenceId>
+--output <new-file>` for integrity-verified bytes. Failed `runs get` and `runs
+wait` JSON receipts include the first failing step when the safe event ledger is
+available. Treat unavailable diagnostics as unavailable, not as a pass. Typed
+values and sensitive step details are redacted. Signed access URLs must never
+enter logs or reports. MCP provides `runs.evidence`; use CLI for artifact
+downloads.
 
 `groups run` takes explicit Project/Group IDs, a stable `--request-key` and
 `--input` JSON containing `selection` (1–20 `{test_id, version}` entries). Each
