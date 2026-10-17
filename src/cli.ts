@@ -13,6 +13,7 @@ import { WorkosAgentRegistrationClient, type AgentRegistrationProtocol } from ".
 import { downloadEvidence } from "./evidence-download.js";
 import { runGroup, type GroupRunInput } from "./group-run.js";
 import { setupProject } from "./setup.js";
+import { memoryClarificationAnswer } from "./memory-clarification-answer.js";
 
 export const QA_ARMY_CLI_VERSION = "0.2.11";
 export const QA_ARMY_API_ORIGIN = "https://api.qa.army";
@@ -378,7 +379,7 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
   if(resource==='memories'){
     const path=`/v1/projects/${id(flags,'--project','prj')}/memory`;
     if(action==='questions'){onlyFlags(flags,['--project','--day']);const day=flags.get('--day');if(day&&!/^\d{4}-\d{2}-\d{2}$/.test(day))throw new Error('--day must use YYYY-MM-DD');return api.operation(path+'/clarifications'+(day?'/'+day:''));}
-    if(action==='answer'){onlyFlags(flags,['--project','--input']);return api.operation(path+'/clarifications','POST',input());}
+    if(action==='answer'){onlyFlags(flags,['--project','--input']);return api.operation(path+'/clarifications','POST',memoryClarificationAnswer(input()));}
     if(['list','graph','summary'].includes(action)){onlyFlags(flags,['--project']);return api.operation(path+(action==='list'?'':`/${action}`));}
     if(action==='clear'){onlyFlags(flags,['--project']);return api.operation(path,'DELETE');}
     if(action==='history'){onlyFlags(flags,['--project']);return api.operation(path+'/history','POST',{});}
