@@ -198,6 +198,7 @@ function stepResults(
       const sensitive = sensitiveInstruction(snapshot.title);
       const current = steps.get(stepId);
       const summary = safeDetail(payload?.summary, sensitive);
+      const stepFailure = summary ?? safeDetail(payload?.reason_code, sensitive) ?? current?.failure_reason;
       steps.set(stepId, {
         step_id: stepId,
         index: Number(snapshot.position) + 1,
@@ -205,7 +206,7 @@ function stepResults(
         instruction: sanitizeInstruction(snapshot.title),
         result: typeof event.outcome === "string" ? event.outcome : current?.result ?? "RUNNING",
         ...(event.outcome === "FAILED" || event.outcome === "ERROR"
-          ? { failure_reason: summary ?? safeDetail(payload?.reason_code, sensitive) }
+          ? stepFailure ? { failure_reason: stepFailure } : {}
           : current?.failure_reason ? { failure_reason: current.failure_reason } : {}),
         ...(current?.assertion_message ? { assertion_message: current.assertion_message } : {}),
         refs: [...(current?.refs ?? []), ...eventRefs(event)],
