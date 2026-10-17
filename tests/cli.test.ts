@@ -379,6 +379,123 @@ describe("QA.army Runs", () => {
     expect(request.mock.calls[0]?.[1]?.headers).toMatchObject({ "idempotency-key": expect.any(String) });
     expect(request.mock.calls[2]?.[1]?.headers).toMatchObject({ "idempotency-key": expect.any(String) });
   });
+
+  it("reports per-step failure evidence from the OpenAPI v2 ledger and redacts typed values", async () => {
+    const runId = `run_${"1".repeat(32)}`;
+    const screenshotId = `evd_${"5".repeat(32)}`;
+    const events = [
+      runEvent({
+        sequence: 1, kind: "step.state", type: "COMPLETED", phase: "COMPLETED", outcome: "PASSED",
+        stepId: `stp_${"6".repeat(32)}`,
+        safe_payload: {
+          step: { id: `stp_${"6".repeat(32)}`, position: 0, type: "ACT", title: "Type hunter2 into the search field", enabled: true },
+          summary: "Search submitted", duration_ms: 10, passed_assertions: 0, failed_assertions: 0, error_assertions: 0,
+        },
+      }),
+      runEvent({
+        sequence: 2, kind: "step.state", type: "COMPLETED", phase: "COMPLETED", outcome: "FAILED",
+        stepId: `stp_${"7".repeat(32)}`,
+        safe_payload: {
+          step: { id: `stp_${"7".repeat(32)}`, position: 1, type: "ASSERT", title: "Verify confirmation message", enabled: true },
+          summary: "Confirmation did not appear", duration_ms: 20, passed_assertions: 0, failed_assertions: 1, error_assertions: 0,
+        },
+        evidence_refs: [{ evidence_id: screenshotId, kind: "SCREENSHOT", relation: "RESULT" }],
+      }),
+      runEvent({
+        sequence: 3, kind: "assertion", type: "TEXT_EQUALS", phase: "COMPLETED", outcome: "FAILED",
+        stepId: `stp_${"7".repeat(32)}`,
+        safe_payload: {
+          summary: "Confirmation text mismatched", expectation: "Order confirmed",
+          actual_summary: "Payment declined", duration_ms: 5, typed_value: false,
+        },
+        evidence_refs: [{ evidence_id: screenshotId, kind: "SCREENSHOT", relation: "RESULT" }],
+      }),
+    ];
+    const request = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/evidence")) return evidenceCatalog(runId, screenshotId);
+      if (url.includes("/events?")) {
+        expect(new Headers(init?.headers).get("accept")).toBe("application/vnd.venkat.run-events.v2+json");
+        return json(eventPage(runId, events));
+      }
+      return response("FAILED");
+    });
+    const output: string[] = [];
+    expect(await runCli(["runs", "evidence", "--run", runId, "--json"],
+      { QA_ARMY_ACCESS_TOKEN: "token" }, { out: (value) => output.push(value), error: vi.fn() }, request)).toBe(0);
+    const report = JSON.parse(output[0]!);
+    expect(report).toMatchObject({
+      run_id: runId,
+      status: "FAILED",
+      steps: [
+        { index: 1, type: "ACT", instruction: "Type [REDACTED] into the search field", result: "PASSED" },
+        {
+          index: 2, type: "ASSERT", instruction: "Verify confirmation message", result: "FAILED",
+          failure_reason: "Expected Order confirmed; observed Payment declined",
+          assertion_message: "Confirmation text mismatched",
+          evidence: [{ evidence_id: screenshotId, type: "SCREENSHOT", relation: "RESULT" }],
+        },
+      ],
+      artifacts: [{ evidence_id: screenshotId, type: "screenshot", evidence_url: runObject("FAILED").run_url }],
+      diagnostics: { step_results: "available", evidence_catalog: "available" },
+    });
+    expect(output[0]).not.toContain("hunter2");
+    expect(report.artifacts[0].download_command).toContain(`--evidence ${screenshotId}`);
+  });
+
+  it("adds concise JSON and human failure diagnostics to failed Run reads", async () => {
+    const runId = `run_${"1".repeat(32)}`;
+    const events = [runEvent({
+      sequence: 1, kind: "step.state", type: "COMPLETED", phase: "COMPLETED", outcome: "ERROR",
+      stepId: `stp_${"8".repeat(32)}`,
+      safe_payload: {
+        step: { id: `stp_${"8".repeat(32)}`, position: 2, type: "ACT", title: "Open checkout", enabled: true },
+        summary: "Browser disconnected", duration_ms: 10, passed_assertions: 0, failed_assertions: 0, error_assertions: 0,
+      },
+    })];
+    const request = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/evidence")) return json({ evidence: [] });
+      if (url.includes("/events?")) return json(eventPage(runId, events));
+      return response("ERROR");
+    });
+    const jsonOutput: string[] = [];
+    expect(await runCli(["runs", "get", "--run", runId, "--json"], { QA_ARMY_ACCESS_TOKEN: "token" },
+      { out: (value) => jsonOutput.push(value), error: vi.fn() }, request)).toBe(0);
+    expect(JSON.parse(jsonOutput[0]!).failure).toEqual({
+      step_number: 3,
+      step_type: "ACT",
+      instruction: "Open checkout",
+      reason: "Browser disconnected",
+      evidence_url: runObject("ERROR").run_url,
+      details_available: true,
+      evidence_available: false,
+    });
+
+    const humanOutput: string[] = [];
+    expect(await runCli(["runs", "get", "--run", runId], { QA_ARMY_ACCESS_TOKEN: "token" },
+      { out: (value) => humanOutput.push(value), error: vi.fn() }, request)).toBe(0);
+    expect(humanOutput).toEqual([
+      `Step 3 ERROR: Open checkout — Browser disconnected — ${runObject("ERROR").run_url}`,
+    ]);
+  });
+
+  it("keeps a failed Run diagnosable when evidence APIs are unavailable", async () => {
+    const request = vi.fn<typeof fetch>(async (input) => String(input).includes("/evidence") || String(input).includes("/events?")
+      ? new Response(null, { status: 503 })
+      : json({ run: { ...runObject("FAILED"), outcome_summary: "Saved assertion failed." } }));
+    const output: string[] = [];
+    const errors: string[] = [];
+    expect(await runCli(["runs", "wait", "--run", `run_${"1".repeat(32)}`, "--json"],
+      { QA_ARMY_ACCESS_TOKEN: "token" },
+      { out: (value) => output.push(value), error: (value) => errors.push(value) }, request)).toBe(0);
+    expect(JSON.parse(output[0]!).failure).toMatchObject({
+      reason: "Saved assertion failed.",
+      details_available: false,
+      evidence_available: false,
+    });
+    expect(errors).toEqual([]);
+  });
 });
 
 describe("QA.army profile-key commands", () => {
@@ -775,5 +892,48 @@ function runObject(status: string) {
     context_schema_version: 2, context_hash: `sha256:${"a".repeat(64)}`,
     resolved_at: "2026-08-19T12:00:00.000Z",
     cancellation_requested_at: null, completed_at: null, outcome_summary: null,
+  };
+}
+
+function evidenceCatalog(runId: string, evidenceId: string) {
+  return json({ evidence: [{
+    evidence_id: evidenceId, run_id: runId, attempt: 1, replay_part: null,
+    type: "screenshot", media_type: "image/png", sha256: "b".repeat(64),
+    byte_size: 1234, captured_at: "2026-08-19T12:01:00.000Z",
+  }] });
+}
+
+function eventPage(runId: string, events: readonly unknown[]) {
+  return {
+    schema_version: "run-event-page.v2", run_id: runId,
+    run: {
+      ...runObject("FAILED"), trigger: "manual", triggered_by: `usr_${"9".repeat(32)}`,
+      created_at: "2026-08-19T12:00:00.000Z", updated_at: "2026-08-19T12:01:00.000Z",
+    },
+    events, next_after: events.length, high_watermark: events.length, has_more: false, terminal: true,
+  };
+}
+
+function runEvent(input: {
+  sequence: number;
+  kind: string;
+  type: string;
+  phase: string | null;
+  outcome: string | null;
+  stepId: string;
+  safe_payload: Record<string, unknown>;
+  evidence_refs?: readonly unknown[];
+}) {
+  return {
+    schema_version: "run-event.v2", event_id: `evt_${input.sequence}`,
+    run_id: `run_${"1".repeat(32)}`, attempt: 1, sequence: input.sequence,
+    occurred_at: "2026-08-19T12:01:00.000Z", elapsed_ms: input.sequence * 10,
+    attempt_elapsed_ms: input.sequence * 10, replay_offset_ms: null,
+    kind: input.kind, type: input.type, phase: input.phase, state: null, outcome: input.outcome,
+    correlation: {
+      step_id: input.stepId, parent_event_id: null, action_id: null,
+      assertion_id: input.kind === "assertion" ? `ast_${input.sequence}` : null, browser_page_id: null,
+    },
+    safe_payload: input.safe_payload, error: null, evidence_refs: input.evidence_refs ?? [],
   };
 }

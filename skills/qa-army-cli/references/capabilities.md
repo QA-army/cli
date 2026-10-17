@@ -13,12 +13,19 @@ explains the intended mapping.
 | Projects | `list`, `create`, `star`, `unstar` |
 | Test Groups | `list`, `get`, `create`, `update`, `run` (explicit selection, 0.2.10+) |
 | Tests | `list`, `get`, `create`, `update`, `archive`, `delete`, `run` |
-| Runs | `list`, `create`, `get`, `start`, `watch`, `wait`, `cancel`, `evidence` (0.2.10+) |
+| Runs | `list`, `create`, `get`, `start`, `watch`, `wait`, `cancel`, `evidence`; failed-Run diagnostics |
 | Account | `api-keys list`, `api-keys create`, `api-keys revoke` |
 
 `tests run` queues one durable saved Test in QA.army cloud. `--wait` returns the
 truthful terminal outcome. Local-browser, environment, and uploaded-app
 variants remain unavailable.
+
+Use `runs get --run run_... --json` or `runs wait --run run_... --json` for a
+terminal receipt with a concise `failure` object. Use `runs evidence --run
+run_... --json` for step results and finalized artifact references. Output
+redacts typed values and sensitive step details. The API exposes stable evidence
+IDs, not permanent artifact URLs; use the returned Run page URL for review and
+`evidence download` for integrity-verified bytes.
 
 ## [request capability]
 
