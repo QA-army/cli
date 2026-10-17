@@ -218,11 +218,12 @@ function stepResults(
       if (!current) continue;
       const payload = optionalObject(event.safe_payload);
       const message = safeDetail(payload?.summary, current.sensitive);
+      const failureReason = assertionReason(payload, current.sensitive) ?? message ?? current.failure_reason;
       steps.set(stepId, {
         ...current,
         ...(message ? { assertion_message: message } : {}),
         ...(event.outcome === "FAILED" || event.outcome === "ERROR"
-          ? { failure_reason: assertionReason(payload, current.sensitive) ?? message ?? current.failure_reason }
+          ? failureReason ? { failure_reason: failureReason } : {}
           : {}),
         refs: [...current.refs, ...eventRefs(event)],
       });

@@ -239,8 +239,8 @@ export async function runCli(
     const options = readFlags(flags);
     let result = await execute(api, resource, action, options);
     if (resource === "runs" && (action === "get" || action === "wait") && failedRun(result)) {
-      result = await addFailureDiagnostics(api, result);
-      io.out(jsonOutput ? JSON.stringify(result, null, 2) : failureLine(result));
+      const diagnosed = await addFailureDiagnostics(api, result);
+      io.out(jsonOutput ? JSON.stringify(diagnosed, null, 2) : failureLine(diagnosed));
       return 0;
     }
     if (resource === "runs" && action === "evidence" && !jsonOutput) {
