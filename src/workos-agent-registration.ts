@@ -112,7 +112,7 @@ export class WorkosAgentRegistrationClient implements AgentRegistrationProtocol 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await this.request(url, { ...init, signal: controller.signal });
+      const response = await this.request(url, { ...init, redirect: "error", signal: controller.signal });
       if (!response.ok) {
         await response.body?.cancel().catch(() => undefined);
         throw new AgentRegistrationError(classify(response.status, phase), response.status);

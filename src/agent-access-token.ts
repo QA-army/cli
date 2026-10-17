@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-import type { ApiAccessTokenProvider } from "./api.js";
 import {
   NativeAgentCredentialStore,
   type AgentCredential,
@@ -11,9 +10,15 @@ import {
   type AgentRegistrationProtocol,
 } from "./workos-agent-registration.js";
 
+export interface ApiAccessTokenProvider {
+  accessToken(): Promise<string>;
+  reexchangeAfterUnauthorized(rejectedToken?: string): Promise<string>;
+}
+
 const expirySkewMs = 30_000;
 
 export class WorkosAgentAccessTokenProvider implements ApiAccessTokenProvider {
+  private inFlight: Promise<string> | undefined;
   private cached: { readonly value: string; readonly expiresAt: number } | undefined;
 
   constructor(
@@ -24,17 +29,30 @@ export class WorkosAgentAccessTokenProvider implements ApiAccessTokenProvider {
   ) {}
 
   async accessToken(): Promise<string> {
+    if (this.inFlight) return this.inFlight;
     if (this.cached && this.cached.expiresAt > this.now() + expirySkewMs) return this.cached.value;
-    return this.exchange(false);
+    return this.singleFlight(false);
   }
 
-  async reexchangeAfterUnauthorized(): Promise<string> {
-    this.cached = undefined;
-    return this.exchange(true);
+  async reexchangeAfterUnauthorized(rejectedToken?: string): Promise<string> {
+    // A late 401 must not invalidate a token already replaced by another request.
+    if (rejectedToken && this.cached && this.cached.value !== rejectedToken && this.cached.expiresAt > this.now()+expirySkewMs) return this.cached.value;
+    return this.singleFlight(true);
+  }
+
+  private singleFlight(forceRefresh: boolean): Promise<string> {
+    if (this.inFlight) return this.inFlight;
+    const work = () => this.exchange(forceRefresh);
+    const pending = this.store.withCredentialLock ? this.store.withCredentialLock(work) : work();
+    this.inFlight = pending;
+    void pending.finally(() => { if (this.inFlight === pending) this.inFlight = undefined; }).catch(() => undefined);
+    return pending;
   }
 
   private async exchange(forceRefresh: boolean): Promise<string> {
-    let credential = this.initialCredential ?? await this.store.get();
+    // Native clients re-read after acquiring the process lock: another process
+    // may have rotated the persisted refresh credential while we waited.
+    let credential = this.store.withCredentialLock ? await this.store.get() : this.initialCredential ?? await this.store.get();
     this.initialCredential = undefined;
     if (!credential) throw new Error("No QA.army credential is available");
 

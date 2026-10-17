@@ -11,13 +11,13 @@ explains the intended mapping.
 | First setup | `setup`, `create test` |
 | Workspaces | `list`, `create`, `get`, `update` |
 | Projects | `list`, `create`, `star`, `unstar` |
-| Test Groups | `list`, `get`, `create`, `update` |
+| Test Groups | `list`, `get`, `create`, `update`, `run` (explicit selection, 0.2.10+) |
 | Tests | `list`, `get`, `create`, `update`, `archive`, `delete`, `run` |
-| Runs | `list`, `create`, `get`, `start`, `watch`, `wait`, `cancel` |
+| Runs | `list`, `create`, `get`, `start`, `watch`, `wait`, `cancel`, `evidence` (0.2.10+) |
 | Account | `api-keys list`, `api-keys create`, `api-keys revoke` |
 
 `tests run` queues one durable saved Test in QA.army cloud. `--wait` returns the
-truthful terminal outcome. Local-browser, group, environment, and uploaded-app
+truthful terminal outcome. Local-browser, environment, and uploaded-app
 variants remain unavailable.
 
 ## [request capability]
@@ -46,7 +46,21 @@ Use an authenticated user session or profile API key. Setup-only WorkOS agent cr
 
 ## Dynamic PR Tests assisted pilot — DOGFOOD-PENDING
 
-When the Workspace is enrolled and the installed CLI supports them, use `qa-army prs list --project prj_...`, `prs get --verification prv_...`, and `prs usage --workspace wsp_...` for reports and shared usage. MCP equivalents are `prs.list`, `prs.get`, and `prs.usage`.
+When the Workspace is enrolled and the installed CLI supports them, a governed claimed WorkOS agent can read reports with `qa-army prs list --project prj_...` and `prs get --verification prv_...`, and explicitly request a new attempt with `prs rerun --verification prv_... --request-key rerun-pr-001`. MCP equivalents are `prs.list`, `prs.get`, and `prs.rerun`. The server checks the claiming user's current Workspace access and retains preview qualification, current-revision checks, idempotency and Run limits. This permission does not include dynamic settings, configuration, usage, cancellation or promotion; those require a supported user session or profile credential. Deployment-watch permissions are separate.
+
+For PR approval links with QA.army evidence, the pending client/server release adds
+`qa-army prs approval-links --project prj_...` and MCP
+`prs.approval_links({ project_id })`. Check installed capabilities first. Use an
+authorized Cognito user session or governed claimed WorkOS agent; profile API
+keys and setup-only credentials are denied. A `403` stays an error, without
+identity fallback. Return the server's links, `qa_state`, freshness, evidence
+reasons and truncation warning. Its `qa_observed_prs` scope covers at most 10
+authorized Project PRs, not every assigned review. Selected Run attempts,
+finalized evidence and cleanup matter; observed checks are not the repository's
+required branch rules. Do not infer
+approval or merge readiness from a link or historical pass. Missing, stale,
+failed and blocked evidence remains so. The operation only reads; never approve,
+merge, start Runs or substitute credentials to make this prompt succeed.
 
 `prs settings` and `prs configure` use an existing integration ID. Configuration is owner-only and requires the selected GitHub repository, selected Vercel Project, sandbox confirmation, and any required sandbox accounts. Restricted agent setup credentials cannot manage the pilot.
 
