@@ -14,7 +14,7 @@ import { downloadEvidence } from "./evidence-download.js";
 import { runGroup, type GroupRunInput } from "./group-run.js";
 import { setupProject } from "./setup.js";
 
-export const QA_ARMY_CLI_VERSION = "0.2.11";
+export const QA_ARMY_CLI_VERSION = "0.2.12";
 export const QA_ARMY_API_ORIGIN = "https://api.qa.army";
 export const CAPABILITY_REQUEST_EXIT_CODE = 2;
 

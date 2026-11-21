@@ -20,7 +20,7 @@ QA.army Projects, Tests, and cloud Runs.
    claim link; read the one-time code from hidden stdin.
 3. Run `qa-army capabilities --json` before assuming an operation exists.
 4. Prefer `qa-army setup` for first-time Project/Test creation and
-   `qa-army tests run <testId> --wait` for durable regression coverage.
+   `qa-army tests run --test tst_... --wait` for durable regression coverage.
 
 If setup reports that multiple Projects match the application URL, list the
 accessible Workspaces, resolve the Workspace the user named or the repository
@@ -63,7 +63,7 @@ Typical flow:
 qa-army workspaces list --json
 qa-army projects list --workspace <workspaceId> --json
 qa-army tests create --project <projectId> --input "$(cat test.json)" --json
-qa-army tests run <testId> --wait --json
+qa-army tests run --test tst_... --wait --json
 ```
 
 Report the Project ID, Test ID, Run ID, terminal status, outcome summary, and
