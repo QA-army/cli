@@ -1,4 +1,4 @@
 interface:
   display_name: "QA.army CLI"
-  short_description: "Create durable Tests and run cloud QA"
-  default_prompt: "Use $qa-army-cli to create or reuse durable QA coverage, run it to a terminal result, and report the exact Project, Test, Run, and dashboard receipt."
+  short_description: "Create durable Tests, run cloud QA, and read per-PR checks"
+  default_prompt: "Use $qa-army-cli to create or reuse durable QA coverage, configure or read live per-PR dynamic and regression Runs when needed, run Tests to a terminal result, and report the exact Project, Test, Run, verification, and dashboard receipt."
