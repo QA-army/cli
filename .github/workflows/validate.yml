@@ -4,11 +4,19 @@ permissions:
   contents: read
 jobs:
   validate:
+    name: validate (${{ matrix.check }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14, windows-2022]
-    runs-on: ${{ matrix.os }}
+        include:
+          - check: ubuntu-24.04
+            runner: ubuntu-24.04
+          # Keep the protected macOS check name when updating the runner image.
+          - check: macos-14
+            runner: macos-15
+          - check: windows-2022
+            runner: windows-2022
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:

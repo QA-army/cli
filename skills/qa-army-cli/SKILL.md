@@ -71,8 +71,8 @@ live Test Run URL when present.
 
 ## Per-PR dynamic and regression runs
 
-QA.army runs dynamic tests and regression tests on every pull request when the
-GitHub App and Project integration are connected. The App posts a `QA.army`
+QA.army runs dynamic tests and regression tests on qualifying pull requests with a matching Vercel preview when the GitHub App
+and Project integration are connected and both suites are configured. The App posts a `QA.army`
 check (not a CLI GitHub Action). Both suites must pass with complete Runs,
 finalized evidence, and cleanup. Free is $0 with 10 tests total and 100 Runs
 total, no card and no renewal; for more capacity, Upgrade or Get started.
