@@ -44,24 +44,69 @@ Use `qa-army memories list --project prj_...` to read scoped knowledge. `create`
 
 Use an authenticated user session or profile API key. Setup-only WorkOS agent credentials do not authorize memory management. Treat observations as historical evidence, requirements as intended behavior, and document imports as proposals requiring review. Never store credentials. Memory usage does not establish correctness or prove improvement.
 
-## Dynamic PR Tests assisted pilot — DOGFOOD-PENDING
+## Per-PR dynamic and regression runs (live)
 
-When the Workspace is enrolled and the installed CLI supports them, a governed claimed WorkOS agent can read reports with `qa-army prs list --project prj_...` and `prs get --verification prv_...`, and explicitly request a new attempt with `prs rerun --verification prv_... --request-key rerun-pr-001`. MCP equivalents are `prs.list`, `prs.get`, and `prs.rerun`. The server checks the claiming user's current Workspace access and retains preview qualification, current-revision checks, idempotency and Run limits. This permission does not include dynamic settings, configuration, usage, cancellation or promotion; those require a supported user session or profile credential. Deployment-watch permissions are separate.
+The QA.army GitHub App posts a `QA.army` check on pull requests. It runs
+**dynamic tests** (changed-behavior plan) and **regression tests** (deployment-watch
+Test Groups) against the preview URL for the PR head revision. Both suites must
+complete with passing Runs, finalized evidence, and confirmed cleanup. No
+applicable tests is not a pass. Proven on QA-army/landing-marketing PRs #37 and
+#38. The App owns execution; there is no repository workflow that calls
+`pr run-dynamic` (that name remains `[request capability]`).
 
-For PR approval links with QA.army evidence, the pending client/server release adds
-`qa-army prs approval-links --project prj_...` and MCP
-`prs.approval_links({ project_id })`. Check installed capabilities first. Use an
-authorized Cognito user session or governed claimed WorkOS agent; profile API
-keys and setup-only credentials are denied. A `403` stays an error, without
-identity fallback. Return the server's links, `qa_state`, freshness, evidence
-reasons and truncation warning. Its `qa_observed_prs` scope covers at most 10
-authorized Project PRs, not every assigned review. Selected Run attempts,
-finalized evidence and cleanup matter; observed checks are not the repository's
-required branch rules. Do not infer
-approval or merge readiness from a link or historical pass. Missing, stale,
-failed and blocked evidence remains so. The operation only reads; never approve,
-merge, start Runs or substitute credentials to make this prompt succeed.
+### Configure
 
-`prs settings` and `prs configure` use an existing integration ID. Configuration is owner-only and requires the selected GitHub repository, selected Vercel Project, sandbox confirmation, and any required sandbox accounts. Restricted agent setup credentials cannot manage the pilot.
+1. Install the QA.army GitHub App on the repository and connect the Project's
+   GitHub + Vercel integration in the product UI.
+2. Enable dynamic tests with a user session or profile API key:
+   `qa-army prs settings --integration int_...`, then
+   `qa-army prs configure --integration int_... --request-key configure-pr-001 --input '{"enabled":true,"max_tests":3,"test_account_ids":[],"sandbox_confirmed":true'}`.
+3. Point regression at saved Groups:
+   `qa-army prs watch --integration int_...` then
+   `qa-army prs watch-update --integration int_... --input JSON` with
+   `repository_id`, `test_group_ids`, and `enabled`.
+4. Confirm sandbox safety before enabling. Planning is included; completed
+   generated Tests and regression Runs consume the shared Workspace Run
+   allowance. Free is $0 with 10 tests total and 100 Runs total, no card and no
+   renewal. For more capacity, Upgrade or Get started.
 
-Cancellation, explicit rerun and regression promotion use `prs cancel`, `prs rerun` and `prs promote` with a stable `--request-key`. A rerun may consume up to three new Runs; explain that before requesting one. Never retry an ambiguous target mutation automatically. Generated Tests are immutable; promotion creates an editable copy in the chosen group. Do not call missing coverage, infrastructure errors or absent evidence a pass. Pilot thresholds are targets, not proven results.
+Configuration, usage, cancel, and promote require a supported user session or
+profile credential. Restricted agent setup credentials cannot manage them.
+Deployment-watch updates need a claiming user who is a current Workspace OWNER.
+
+### Read
+
+A governed claimed WorkOS agent can read and explicitly rerun within the
+claiming user's Workspace:
+
+```bash
+qa-army prs list --project prj_...
+qa-army prs get --verification prv_...
+qa-army prs approval-links --project prj_... --json
+qa-army prs rerun --verification prv_... --request-key rerun-pr-001
+qa-army runs list --test tst_... --trigger deploy
+```
+
+MCP equivalents include `prs.list`, `prs.get`, `prs.rerun`, and
+`prs.approval_links`. Check installed capabilities first. Profile API keys and
+setup-only credentials are denied for approval-links; a `403` stays an error
+without identity fallback. Return the server's links, `qa_state`, freshness,
+evidence reasons, and truncation warning. Scope is at most 10 QA-observed PRs,
+not every assigned review. Observed checks are not the repository's required
+branch rules. Do not infer approval or merge readiness.
+
+### Gaps and manual path
+
+`ci` and `pr run-dynamic` remain `[request capability]`. To run a saved Test
+yourself from CI or an agent, use:
+
+```bash
+qa-army tests run --test tst_... --wait --json
+```
+
+Cancellation, explicit rerun, and regression promotion use `prs cancel`,
+`prs rerun`, and `prs promote` with a stable `--request-key`. A rerun may
+consume up to three new Runs; explain that before requesting one. Never retry
+an ambiguous target mutation automatically. Generated Tests are immutable;
+promotion creates an editable copy in the chosen group. Do not call missing
+coverage, infrastructure errors, or absent evidence a pass.

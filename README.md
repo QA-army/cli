@@ -5,7 +5,7 @@
 ## Start
 
 ```sh
-npm install -g https://github.com/QA-army/cli/releases/download/v0.2.11/qa-army-0.2.11.tgz
+npm install -g https://github.com/QA-army/cli/releases/download/v0.2.12/qa-army-0.2.12.tgz
 qa-army auth agent-register --email you@example.com
 qa-army status --json
 qa-army capabilities
@@ -71,21 +71,47 @@ Memory management is undergoing release validation. Use a user session or profil
 
 Use a user session or profile API key; claimed WorkOS credentials cannot register builds. PUT the exact original file to the reservation's short-lived upload URL with its supplied headers, without your Product bearer token. Complete registration to verify its checksum and size. Keep the same request key for an ambiguous reserve retry. Registered files are immutable and do not prove native execution or a passing Run.
 
-### Dynamic PR Tests pilot
+### Per-PR dynamic and regression runs
 
-`prs` commands target the assisted, **DOGFOOD-PENDING** pilot. A governed claimed WorkOS agent can use `prs list`, `prs get`, and explicit `prs rerun` within the claiming user's authorized Workspace. The server retains preview qualification, current-revision checks, idempotency and Run limits. Dynamic settings, configuration, usage, cancellation and promotion remain outside this claimed-agent permission; use a supported user session or profile credential for those operations. Deployment-watch permissions are separate.
+QA.army runs **dynamic tests** and **regression tests** on qualifying pull requests with a matching Vercel preview when the QA.army GitHub App is installed, the Project's integration is connected, and both suites are configured. Proven live on [QA-army/landing-marketing#37](https://github.com/QA-army/landing-marketing/pull/37) and [#38](https://github.com/QA-army/landing-marketing/pull/38): the App posted a `QA.army` check against the Vercel preview URL for the PR head revision, reported both suites as `PASSED (COMPLETE_EXECUTION)`, and linked dashboard verification `prv_...` plus individual Run attempts. Success requires complete passing Runs, finalized evidence, and confirmed cleanup for both suites. No applicable tests is not a passing Run.
+
+Those per-PR Runs are **server-owned**. They are not started by a repository GitHub Actions workflow calling the CLI. Landing-marketing's `validate` workflow only runs marketing/package checks; the `QA.army` check comes from the GitHub App ([qa-army](https://github.com/apps/qa-army)).
+
+Use the CLI to configure and read that live path:
 
 ```sh
+# Dynamic PR Tests — owner/user session or profile API key
+qa-army prs settings --integration int_...
+qa-army prs configure --integration int_... --request-key configure-pr-001 --input '{"enabled":true,"max_tests":3,"test_account_ids":[],"sandbox_confirmed":true}'
+qa-army prs usage --workspace wsp_...
+
+# Regression via deployment watch (saved Test Groups on preview deploys)
+qa-army prs watch --integration int_...
+qa-army prs watch-update --integration int_... --input '{"repository_id":"123456789","test_group_ids":["tgr_00000000000000000000000000000001"],"enabled":true}'
+
+# Read a PR verification after the App posts the check
 qa-army prs list --project prj_...
 qa-army prs get --verification prv_...
-qa-army prs settings --integration int_...
-qa-army prs usage --workspace wsp_...
-qa-army prs configure --integration int_... --request-key configure-pr-001 --input '{"enabled":true,"max_tests":3,"test_account_ids":[],"sandbox_confirmed":true}'
+qa-army prs approval-links --project prj_... --json
+qa-army runs list --test tst_... --trigger deploy
+
+# Explicit rerun / cancel / promote (reuse --request-key after an uncertain response)
+qa-army prs rerun --verification prv_... --request-key rerun-pr-001
 qa-army prs cancel --verification prv_... --request-key cancel-pr-001
 qa-army prs promote --verification prv_... --test tst_... --group tgr_... --request-key promote-pr-001
 ```
 
-Enable only after configuring the matching Vercel Project and confirming sandbox safety. Planning is included; each completed generated Test consumes one shared Workspace Run. `prs rerun --verification prv_... --request-key rerun-pr-001` explicitly creates a new attempt and may consume up to three new Runs. Reuse a request key after an uncertain response; do not automatically rerun ambiguous mutations. No applicable coverage is not a passing result.
+A governed claimed WorkOS agent can use `prs list`, `prs get`, and explicit `prs rerun` within the claiming user's authorized Workspace. Dynamic settings, configuration, usage, cancellation, and promotion require a supported user session or profile credential. Deployment-watch updates require a claiming user who is a current Workspace OWNER. The server retains preview qualification, current-revision checks, idempotency, and Run limits.
+
+Enable dynamic tests only after configuring the matching Vercel Project and confirming sandbox safety. Planning is included; each completed generated Test consumes one shared Workspace Run. `prs rerun` may consume up to three new Runs. Do not automatically rerun ambiguous mutations.
+
+There is no `qa-army pr run-dynamic` or `qa-army ci` command (`REQUEST_CAPABILITY`). To run a saved Test yourself from CI or an agent, use the existing cloud path:
+
+```sh
+qa-army tests run --test tst_... --wait --json
+```
+
+Inject `QA_ARMY_API_KEY` or a governed access token through your secret mechanism; never put credentials in process arguments. The Free plan is $0 with 10 tests total and 100 Runs total, no card and no renewal. For more capacity, Upgrade or Get started.
 
 ## ACT outcomes
 
@@ -170,7 +196,9 @@ receipts and explicitly cancel any remaining unused READY Runs. Never replace th
 
 ## Deployment watch Test Groups
 
-Use `qa-army prs watch --integration int_...` or MCP
+Deployment watch selects the saved Test Groups that feed **regression** on
+preview deployments in the live per-PR path above. Use
+`qa-army prs watch --integration int_...` or MCP
 `prs.watch({integration_id})` to read an existing connected GitHub deployment
 watch. Update its full selection with `qa-army prs watch-update --integration
 int_... --input JSON` or `prs.watch_update({integration_id, ...body})`:

@@ -14,7 +14,7 @@ import { downloadEvidence } from "./evidence-download.js";
 import { runGroup, type GroupRunInput } from "./group-run.js";
 import { setupProject } from "./setup.js";
 
-export const QA_ARMY_CLI_VERSION = "0.2.11";
+export const QA_ARMY_CLI_VERSION = "0.2.12";
 export const QA_ARMY_API_ORIGIN = "https://api.qa.army";
 export const CAPABILITY_REQUEST_EXIT_CODE = 2;
 
@@ -522,7 +522,7 @@ function helpText(subject: readonly string[]): string {
   }
   const detail: Record<string, string> = {
     builds: "Usage: qa-army builds <list|reserve|complete> [--project prj_...] [--input JSON --request-key KEY] [--build nbd_...]",
-    prs: "Usage: qa-army prs <approval-links|list|get|cancel|rerun|promote|settings|configure|usage|watch|watch-update> --project prj_... | --verification prv_... | --integration int_... | --workspace wsp_... [--input JSON] [--test tst_... --group tgr_...] [--request-key KEY]. approval-links reads QA-observed PR review links and evidence, not approval or merge readiness. Dynamic verification commands are pilot-only; watch/watch-update manage an existing GitHub deployment watch. Reruns may consume up to three new Runs; planning is included.",
+    prs: "Usage: qa-army prs <approval-links|list|get|cancel|rerun|promote|settings|configure|usage|watch|watch-update> --project prj_... | --verification prv_... | --integration int_... | --workspace wsp_... [--input JSON] [--test tst_... --group tgr_...] [--request-key KEY]. approval-links reads QA-observed PR review links and evidence, not approval or merge readiness. The QA.army GitHub App runs dynamic and regression suites on qualifying pull requests and posts the QA.army check; configure/list/get manage dynamic verification, and watch/watch-update manage an existing GitHub deployment watch for regression Groups. Reruns may consume up to three new Runs; planning is included.",
     memories: "Usage: qa-army memories <questions|answer|list|create|update|approve|reject|archive|clear|settings|graph|summary|import|history> --project prj_... [--input JSON] [--memory mem_... --version N]",
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
     setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
