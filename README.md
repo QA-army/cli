@@ -1,11 +1,11 @@
 # QA.army CLI
 
-`qa-army` (also `qa`) creates durable Tests, runs them in QA.army, and returns JSON receipts. Requires Node.js 22+; MIT licensed.
+`qa-army` creates durable Tests, runs them in QA.army, and returns JSON receipts. Requires Node.js 22+; MIT licensed.
 
 ## Start
 
 ```sh
-npm install -g https://github.com/QA-army/cli/releases/download/v0.2.12/qa-army-0.2.12.tgz
+npm install -g qa-army
 qa-army auth agent-register --email you@example.com
 qa-army status --json
 qa-army capabilities
