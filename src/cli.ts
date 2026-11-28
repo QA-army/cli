@@ -26,7 +26,7 @@ const supportedCommands = [
   "auth agent-register", "auth status", "auth logout", "status", "logout", "signout",
   "setup", "create test", "workspaces list", "workspaces create", "workspaces get",
   "builds list", "builds reserve", "builds complete",
-  "workspaces update", "projects list", "projects create", "projects star", "projects unstar",
+  "workspaces update", "projects list", "projects create", "projects star", "projects unstar", "projects agent-email", "projects agent-email-prepare",
   "members list", "invitations create", "groups list", "groups get", "groups create",
   "groups update", "groups run", "tests list", "tests get", "tests create", "tests update", "tests archive",
   "tests delete", "tests run", "runs list", "runs create", "runs get", "runs start",
@@ -55,7 +55,7 @@ const apiActions: Readonly<Record<string, readonly string[]>> = {
   builds: ["list", "reserve", "complete"],
   memories: ["questions", "answer", "list", "create", "update", "approve", "reject", "archive", "delete", "clear", "settings", "graph", "summary", "import", "history"],
   workspaces: ["list", "create", "get", "update"],
-  projects: ["list", "create", "star", "unstar"],
+  projects: ["list", "create", "star", "unstar", "agent-email", "agent-email-prepare"],
   members: ["list"],
   invitations: ["create"],
   groups: ["list", "get", "create", "update", "run"],
@@ -403,6 +403,8 @@ async function execute(api: VenkatApi, resource: string, action: string, flags: 
     case "projects.list": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/projects`);
     case "projects.create": onlyFlags(flags, ["--workspace", "--input"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/projects`, "POST", input());
     case "projects.star": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/star`, "PUT");
+    case "projects.agent-email": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/agent-email`);
+    case "projects.agent-email-prepare": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/agent-email/prepare`, "POST", {});
     case "projects.unstar": onlyFlags(flags, ["--project"]); return api.operation(`/v1/projects/${id(flags, "--project", "prj")}/star`, "DELETE");
     case "members.list": onlyFlags(flags, ["--workspace"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/members`);
     case "invitations.create": onlyFlags(flags, ["--workspace", "--input"]); return api.operation(`/v1/workspaces/${id(flags, "--workspace", "wsp")}/invitations`, "POST", input());
@@ -527,7 +529,7 @@ function helpText(subject: readonly string[]): string {
     auth: "Usage: qa-army auth <agent-register|status|logout> [options]",
     setup: 'Usage: qa-army setup --app-url <url> --project-name <name> --input <SaveTestRequest-JSON> [--workspace wsp_...]',
     workspaces: "Usage: qa-army workspaces <list|create|get|update> [options]",
-    projects: "Usage: qa-army projects <list|create|star|unstar> [options]",
+    projects: "Usage: qa-army projects <list|create|star|unstar|agent-email|agent-email-prepare> [options]",
     groups: "Usage: qa-army groups <list|get|create|update|run> [options]",
     tests: "Usage: qa-army tests <list|get|create|update|archive|delete|run> [options]",
     runs: "Usage: qa-army runs <list|create|get|start|watch|wait|cancel|evidence> [options]",
